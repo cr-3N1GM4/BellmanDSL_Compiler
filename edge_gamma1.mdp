@@ -1,0 +1,14 @@
+# ============================================================
+# Edge Case: Single absorbing state, gamma at boundary
+# Tests: gamma=1.0 (should clamp or handle gracefully)
+# ============================================================
+
+STATE: Only
+
+ACTION: Stay
+
+TRANSITION: Only Stay Only 1.0
+
+REWARD: Only 5.0
+
+DISCOUNT: 1.0

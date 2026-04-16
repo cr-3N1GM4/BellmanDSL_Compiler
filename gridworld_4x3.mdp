@@ -1,0 +1,259 @@
+# ============================================================
+# GridWorld 4x3 — Classic Russell & Norvig Layout
+# Author: Charvit Rajani (Roll: 240102028)
+# Date:   2026-04-10
+#
+# LAYOUT (row 3 = top, row 1 = bottom):
+#
+#   Col:   1       2       3       4
+#   Row 3: (1,3)   (2,3)   (3,3)   (4,3)=GOAL [+1]
+#   Row 2: (1,2)   [WALL]  (3,2)   (4,2)=TRAP [-1]
+#   Row 1: (1,1)   (2,1)   (3,1)   (4,1)
+#
+# Agent starts at (1,1). Goal is (4,3). Trap is (4,2).
+# Cell (2,2) is a WALL — the agent cannot enter it.
+#
+# STOCHASTIC MOVEMENT MODEL:
+#   - 80% chance of going in the intended direction
+#   - 10% chance of slipping left (perpendicular)
+#   - 10% chance of slipping right (perpendicular)
+#   - If movement would hit a wall or boundary, agent stays in place
+#
+# NAMING CONVENTION: State "R1C1" = Row 1, Column 1
+# ============================================================
+
+# --- 11 navigable states (12 cells minus 1 wall) ---
+STATE: R1C1
+STATE: R1C2
+STATE: R1C3
+STATE: R1C4
+STATE: R2C1
+# R2C2 is a WALL — not declared as a state
+STATE: R2C3
+STATE: R2C4
+STATE: R3C1
+STATE: R3C2
+STATE: R3C3
+STATE: R3C4
+
+# --- 4 compass actions ---
+ACTION: Up
+ACTION: Down
+ACTION: Left
+ACTION: Right
+
+# ============================================================
+# TRANSITIONS
+# For each (state, action), we define 3 outcomes:
+#   80% intended direction, 10% slip left, 10% slip right
+#   Hitting a wall/boundary means staying in place
+# ============================================================
+
+# ---- R1C1 (bottom-left corner) ----
+# Up: intended=R2C1, slip-left=R1C1(wall), slip-right=R1C2
+TRANSITION: R1C1 Up R2C1 0.8
+TRANSITION: R1C1 Up R1C1 0.1
+TRANSITION: R1C1 Up R1C2 0.1
+
+# Down: intended=R1C1(boundary), slip-left=R1C2, slip-right=R1C1(boundary)
+TRANSITION: R1C1 Down R1C1 0.9
+TRANSITION: R1C1 Down R1C2 0.1
+
+# Left: intended=R1C1(boundary), slip-left=R1C1(boundary), slip-right=R2C1
+TRANSITION: R1C1 Left R1C1 0.9
+TRANSITION: R1C1 Left R2C1 0.1
+
+# Right: intended=R1C2, slip-left=R2C1, slip-right=R1C1(boundary)
+TRANSITION: R1C1 Right R1C2 0.8
+TRANSITION: R1C1 Right R2C1 0.1
+TRANSITION: R1C1 Right R1C1 0.1
+
+# ---- R1C2 ----
+# Up: intended=R2C2(WALL→stay), slip-left=R1C1, slip-right=R1C3
+TRANSITION: R1C2 Up R1C2 0.8
+TRANSITION: R1C2 Up R1C1 0.1
+TRANSITION: R1C2 Up R1C3 0.1
+
+# Down: intended=R1C2(boundary), slip-left=R1C3, slip-right=R1C1
+TRANSITION: R1C2 Down R1C2 0.8
+TRANSITION: R1C2 Down R1C3 0.1
+TRANSITION: R1C2 Down R1C1 0.1
+
+# Left: intended=R1C1, slip-left=R1C2(boundary), slip-right=R2C2(WALL→stay)
+TRANSITION: R1C2 Left R1C1 0.8
+TRANSITION: R1C2 Left R1C2 0.2
+
+# Right: intended=R1C3, slip-left=R2C2(WALL→stay), slip-right=R1C2(boundary)
+TRANSITION: R1C2 Right R1C3 0.8
+TRANSITION: R1C2 Right R1C2 0.2
+
+# ---- R1C3 ----
+# Up: intended=R2C3, slip-left=R1C2, slip-right=R1C4
+TRANSITION: R1C3 Up R2C3 0.8
+TRANSITION: R1C3 Up R1C2 0.1
+TRANSITION: R1C3 Up R1C4 0.1
+
+# Down: intended=R1C3(boundary), slip-left=R1C4, slip-right=R1C2
+TRANSITION: R1C3 Down R1C3 0.8
+TRANSITION: R1C3 Down R1C4 0.1
+TRANSITION: R1C3 Down R1C2 0.1
+
+# Left: intended=R1C2, slip-left=R1C3(boundary), slip-right=R2C3
+TRANSITION: R1C3 Left R1C2 0.8
+TRANSITION: R1C3 Left R1C3 0.1
+TRANSITION: R1C3 Left R2C3 0.1
+
+# Right: intended=R1C4, slip-left=R2C3, slip-right=R1C3(boundary)
+TRANSITION: R1C3 Right R1C4 0.8
+TRANSITION: R1C3 Right R2C3 0.1
+TRANSITION: R1C3 Right R1C3 0.1
+
+# ---- R1C4 ----
+# Up: intended=R2C4, slip-left=R1C3, slip-right=R1C4(boundary)
+TRANSITION: R1C4 Up R2C4 0.8
+TRANSITION: R1C4 Up R1C3 0.1
+TRANSITION: R1C4 Up R1C4 0.1
+
+# Down: intended=R1C4(boundary), slip-left=R1C4(boundary), slip-right=R1C3
+TRANSITION: R1C4 Down R1C4 0.9
+TRANSITION: R1C4 Down R1C3 0.1
+
+# Left: intended=R1C3, slip-left=R1C4(boundary), slip-right=R2C4
+TRANSITION: R1C4 Left R1C3 0.8
+TRANSITION: R1C4 Left R1C4 0.1
+TRANSITION: R1C4 Left R2C4 0.1
+
+# Right: intended=R1C4(boundary), slip-left=R2C4, slip-right=R1C4(boundary)
+TRANSITION: R1C4 Right R1C4 0.8
+TRANSITION: R1C4 Right R2C4 0.1
+TRANSITION: R1C4 Right R1C4 0.1
+
+# ---- R2C1 ----
+# Up: intended=R3C1, slip-left=R2C1(boundary), slip-right=R2C2(WALL→stay)
+TRANSITION: R2C1 Up R3C1 0.8
+TRANSITION: R2C1 Up R2C1 0.2
+
+# Down: intended=R1C1, slip-left=R2C2(WALL→stay), slip-right=R2C1(boundary)
+TRANSITION: R2C1 Down R1C1 0.8
+TRANSITION: R2C1 Down R2C1 0.2
+
+# Left: intended=R2C1(boundary), slip-left=R1C1, slip-right=R3C1
+TRANSITION: R2C1 Left R2C1 0.8
+TRANSITION: R2C1 Left R1C1 0.1
+TRANSITION: R2C1 Left R3C1 0.1
+
+# Right: intended=R2C2(WALL→stay), slip-left=R3C1, slip-right=R1C1
+TRANSITION: R2C1 Right R2C1 0.8
+TRANSITION: R2C1 Right R3C1 0.1
+TRANSITION: R2C1 Right R1C1 0.1
+
+# ---- R2C3 ----
+# Up: intended=R3C3, slip-left=R2C2(WALL→stay), slip-right=R2C4
+TRANSITION: R2C3 Up R3C3 0.8
+TRANSITION: R2C3 Up R2C3 0.1
+TRANSITION: R2C3 Up R2C4 0.1
+
+# Down: intended=R1C3, slip-left=R2C4, slip-right=R2C2(WALL→stay)
+TRANSITION: R2C3 Down R1C3 0.8
+TRANSITION: R2C3 Down R2C4 0.1
+TRANSITION: R2C3 Down R2C3 0.1
+
+# Left: intended=R2C2(WALL→stay), slip-left=R1C3, slip-right=R3C3
+TRANSITION: R2C3 Left R2C3 0.8
+TRANSITION: R2C3 Left R1C3 0.1
+TRANSITION: R2C3 Left R3C3 0.1
+
+# Right: intended=R2C4, slip-left=R3C3, slip-right=R1C3
+TRANSITION: R2C3 Right R2C4 0.8
+TRANSITION: R2C3 Right R3C3 0.1
+TRANSITION: R2C3 Right R1C3 0.1
+
+# ---- R2C4 = TRAP (absorbing) ----
+TRANSITION: R2C4 Up R2C4 1.0
+TRANSITION: R2C4 Down R2C4 1.0
+TRANSITION: R2C4 Left R2C4 1.0
+TRANSITION: R2C4 Right R2C4 1.0
+
+# ---- R3C1 ----
+# Up: intended=R3C1(boundary), slip-left=R3C1(boundary), slip-right=R3C2
+TRANSITION: R3C1 Up R3C1 0.9
+TRANSITION: R3C1 Up R3C2 0.1
+
+# Down: intended=R2C1, slip-left=R3C2, slip-right=R3C1(boundary)
+TRANSITION: R3C1 Down R2C1 0.8
+TRANSITION: R3C1 Down R3C2 0.1
+TRANSITION: R3C1 Down R3C1 0.1
+
+# Left: intended=R3C1(boundary), slip-left=R2C1, slip-right=R3C1(boundary)
+TRANSITION: R3C1 Left R3C1 0.9
+TRANSITION: R3C1 Left R2C1 0.1
+
+# Right: intended=R3C2, slip-left=R3C1(boundary), slip-right=R2C1
+TRANSITION: R3C1 Right R3C2 0.8
+TRANSITION: R3C1 Right R3C1 0.1
+TRANSITION: R3C1 Right R2C1 0.1
+
+# ---- R3C2 ----
+# Up: intended=R3C2(boundary), slip-left=R3C1, slip-right=R3C3
+TRANSITION: R3C2 Up R3C2 0.8
+TRANSITION: R3C2 Up R3C1 0.1
+TRANSITION: R3C2 Up R3C3 0.1
+
+# Down: intended=R2C2(WALL→stay), slip-left=R3C3, slip-right=R3C1
+TRANSITION: R3C2 Down R3C2 0.8
+TRANSITION: R3C2 Down R3C3 0.1
+TRANSITION: R3C2 Down R3C1 0.1
+
+# Left: intended=R3C1, slip-left=R3C2(boundary), slip-right=R2C2(WALL→stay)
+TRANSITION: R3C2 Left R3C1 0.8
+TRANSITION: R3C2 Left R3C2 0.2
+
+# Right: intended=R3C3, slip-left=R2C2(WALL→stay), slip-right=R3C2(boundary)
+TRANSITION: R3C2 Right R3C3 0.8
+TRANSITION: R3C2 Right R3C2 0.2
+
+# ---- R3C3 ----
+# Up: intended=R3C3(boundary), slip-left=R3C2, slip-right=R3C4
+TRANSITION: R3C3 Up R3C3 0.8
+TRANSITION: R3C3 Up R3C2 0.1
+TRANSITION: R3C3 Up R3C4 0.1
+
+# Down: intended=R2C3, slip-left=R3C4, slip-right=R3C2
+TRANSITION: R3C3 Down R2C3 0.8
+TRANSITION: R3C3 Down R3C4 0.1
+TRANSITION: R3C3 Down R3C2 0.1
+
+# Left: intended=R3C2, slip-left=R2C3, slip-right=R3C3(boundary)
+TRANSITION: R3C3 Left R3C2 0.8
+TRANSITION: R3C3 Left R2C3 0.1
+TRANSITION: R3C3 Left R3C3 0.1
+
+# Right: intended=R3C4, slip-left=R3C3(boundary), slip-right=R2C3
+TRANSITION: R3C3 Right R3C4 0.8
+TRANSITION: R3C3 Right R3C3 0.1
+TRANSITION: R3C3 Right R2C3 0.1
+
+# ---- R3C4 = GOAL (absorbing) ----
+TRANSITION: R3C4 Up R3C4 1.0
+TRANSITION: R3C4 Down R3C4 1.0
+TRANSITION: R3C4 Left R3C4 1.0
+TRANSITION: R3C4 Right R3C4 1.0
+
+# ============================================================
+# REWARDS
+# R(s) = -0.04 for all normal states (small cost of living)
+# R(Goal) = +1.0, R(Trap) = -1.0
+# ============================================================
+REWARD: R1C1 -0.04
+REWARD: R1C2 -0.04
+REWARD: R1C3 -0.04
+REWARD: R1C4 -0.04
+REWARD: R2C1 -0.04
+REWARD: R2C3 -0.04
+REWARD: R2C4 -1.0
+REWARD: R3C1 -0.04
+REWARD: R3C2 -0.04
+REWARD: R3C3 -0.04
+REWARD: R3C4 1.0
+
+DISCOUNT: 0.9

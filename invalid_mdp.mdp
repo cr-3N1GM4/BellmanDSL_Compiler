@@ -1,0 +1,49 @@
+# ============================================================
+# INVALID MDP — Tests ALL Validator Error Types
+# This file is DESIGNED to fail validation.
+# ============================================================
+
+# -- Declare some states (but NOT all states used in transitions) --
+STATE: Start
+STATE: Middle
+STATE: Goal
+
+# Missing: STATE: Trap  (will trigger undeclared dest state error)
+# Missing: STATE: Phantom (will never be used — tests orphan detection)
+
+# -- Declare actions (but miss one) --
+ACTION: MoveRight
+ACTION: Stay
+
+# Missing: ACTION: MoveLeft  (will trigger undeclared action error)
+
+# -- Transitions with errors --
+
+# These two are fine (Start, MoveRight) sums to 0.8 + 0.2 = 1.0
+TRANSITION: Start MoveRight Middle 0.8
+TRANSITION: Start MoveRight Start 0.2
+
+# ERROR: "Trap" is NOT declared as a STATE
+TRANSITION: Middle MoveRight Goal 0.7
+TRANSITION: Middle MoveRight Trap 0.3
+
+# ERROR: "MoveLeft" is NOT declared as an ACTION
+TRANSITION: Middle MoveLeft Start 0.9
+TRANSITION: Middle MoveLeft Middle 0.1
+
+# This is fine
+TRANSITION: Goal Stay Goal 1.0
+
+# ERROR: Probabilities for (Start, Stay) sum to 0.6, NOT 1.0
+TRANSITION: Start Stay Start 0.4
+TRANSITION: Start Stay Middle 0.2
+
+# -- Rewards (but forget one state) --
+REWARD: Start 0.0
+REWARD: Middle 1.0
+# Missing: REWARD: Goal  (will trigger missing reward warning)
+
+# ERROR: Reward references undeclared state "Phantom"
+REWARD: Phantom 999.0
+
+DISCOUNT: 0.9

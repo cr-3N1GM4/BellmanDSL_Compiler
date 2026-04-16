@@ -1,0 +1,44 @@
+# ============================================================
+# GridWorld Simple MDP Definition
+# Author: Charvit Rajani (Roll: 240102028)
+# This file describes a simple 3-state MDP for testing.
+# ============================================================
+
+# --- Step 1: Declare all states in the environment ---
+STATE: Start
+STATE: Middle
+STATE: Goal
+STATE: Trap
+
+# --- Step 2: Declare all possible actions the agent can take ---
+ACTION: MoveRight
+ACTION: MoveLeft
+ACTION: Stay
+
+# --- Step 3: Define transition probabilities ---
+# Format: TRANSITION: <from_state> <action> <to_state> <probability>
+# Rule: All transitions from the same (state, action) MUST sum to 1.0
+
+TRANSITION: Start MoveRight Middle 0.8
+TRANSITION: Start MoveRight Start 0.2
+
+TRANSITION: Middle MoveRight Goal 0.7
+TRANSITION: Middle MoveRight Trap 0.3
+
+TRANSITION: Middle MoveLeft Start 0.9
+TRANSITION: Middle MoveLeft Middle 0.1
+
+TRANSITION: Goal Stay Goal 1.0
+
+TRANSITION: Trap Stay Trap 1.0
+
+# --- Step 4: Define rewards for reaching each state ---
+# Format: REWARD: <state> <value>
+REWARD: Start 0.0
+REWARD: Middle 1.0
+REWARD: Goal 100.0
+REWARD: Trap -50.0
+
+# --- Step 5: Define the discount factor (gamma) ---
+# Must be between 0.0 and 1.0 (inclusive)
+DISCOUNT: 0.9
