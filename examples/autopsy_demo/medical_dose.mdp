@@ -1,0 +1,54 @@
+# medical_dose.mdp — Phase 3B autopsy demo: the backwards solver finds a
+# minimum perturbation that breaks VERIFY.
+#
+# A simplified medical-dosage MDP. State is patient response category;
+# action is dose level. The clinical model assumes a particular response
+# distribution that yields a particular V*. The VERIFY block encodes the
+# clinical safety guarantee:
+#   V(Stable) > 8.0  (the model is at V=9.5; engineers wrote a tight bound)
+#
+# In the field log, the empirical response distribution is slightly worse
+# than the model assumed. The backwards solver finds the smallest alpha
+# along the empirical direction at which V(Stable) drops below 8.0, and
+# reports the corresponding ||DeltaT||_1.
+
+STATE: Stable
+STATE: Worse
+STATE: Critical
+
+ACTION: LowDose
+ACTION: HighDose
+
+# Model: LowDose mostly keeps Stable; small chance of Worse.
+TRANSITION: Stable   LowDose  Stable    0.95
+TRANSITION: Stable   LowDose  Worse     0.05
+# Model: HighDose is more aggressive: more recovery probability from
+# Worse but small chance of Critical from Stable too.
+TRANSITION: Stable   HighDose Stable    0.85
+TRANSITION: Stable   HighDose Worse     0.10
+TRANSITION: Stable   HighDose Critical  0.05
+
+TRANSITION: Worse    LowDose  Stable    0.40
+TRANSITION: Worse    LowDose  Worse     0.55
+TRANSITION: Worse    LowDose  Critical  0.05
+TRANSITION: Worse    HighDose Stable    0.65
+TRANSITION: Worse    HighDose Worse     0.25
+TRANSITION: Worse    HighDose Critical  0.10
+
+TRANSITION: Critical LowDose  Critical  0.70
+TRANSITION: Critical LowDose  Worse     0.30
+TRANSITION: Critical HighDose Critical  0.50
+TRANSITION: Critical HighDose Worse     0.50
+
+REWARD: Stable      1.0
+REWARD: Worse      -1.0
+REWARD: Critical  -10.0
+
+DISCOUNT: 0.90
+SOLVER:   value_iteration
+
+# The engineer's confidence bounds. Under the model these all pass.
+# An empirical-direction perturbation slightly below alpha=1.0 should
+# break the first one.
+VERIFY: V(Stable) > 7.5
+VERIFY: pi(Stable) == LowDose

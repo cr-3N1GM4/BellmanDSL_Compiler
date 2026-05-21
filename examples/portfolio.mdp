@@ -1,0 +1,51 @@
+# portfolio.mdp — Market regime-switching portfolio optimizer (Phase 2A).
+#
+# Four hidden market regimes (Bull / Bear / Sideways / Crisis) are inferred
+# by Baum-Welch from a CSV of monthly returns. The learned transition matrix
+# becomes the MDP transition structure via BRIDGE: hmm -> mdp; rewards
+# encode the historical Sharpe of each (regime, allocation) pair.
+#
+# Run:
+#   ./mdp_compiler examples/portfolio.mdp
+#   ./mdp_compiler examples/portfolio.mdp --show-hmm
+#   ./mdp_compiler examples/portfolio.mdp --json-out portfolio.json
+
+HMM_STATES:     Bull Bear Sideways Crisis
+EMISSION_TYPE:  gaussian
+FIT_HMM:        examples/portfolio_returns.csv iterations=200
+HMM_SEED:       42
+
+ACTION: AggressiveEquity   # 90% equity, 10% liquid
+ACTION: ModerateEquity     # 60% equity, 40% debt
+ACTION: Defensive          # 30% equity, 70% debt/gold
+ACTION: CashAndGold        # 10% equity, 50% gold, 40% liquid
+
+BRIDGE: hmm -> mdp
+
+# Rewards calibrated from historical Sharpe ratios per regime (verbatim
+# from the v3.0 master spec).
+ACTION_REWARD: Bull     AggressiveEquity   0.85
+ACTION_REWARD: Bull     ModerateEquity     0.60
+ACTION_REWARD: Bull     Defensive          0.25
+ACTION_REWARD: Bull     CashAndGold       -0.05
+ACTION_REWARD: Bear     AggressiveEquity  -0.70
+ACTION_REWARD: Bear     ModerateEquity    -0.30
+ACTION_REWARD: Bear     Defensive          0.10
+ACTION_REWARD: Bear     CashAndGold        0.02
+ACTION_REWARD: Sideways AggressiveEquity   0.15
+ACTION_REWARD: Sideways ModerateEquity     0.20
+ACTION_REWARD: Sideways Defensive          0.18
+ACTION_REWARD: Sideways CashAndGold        0.01
+ACTION_REWARD: Crisis   AggressiveEquity  -1.20
+ACTION_REWARD: Crisis   ModerateEquity    -0.50
+ACTION_REWARD: Crisis   Defensive          0.05
+ACTION_REWARD: Crisis   CashAndGold        0.08
+
+DISCOUNT: 0.92
+SOLVER:   policy_iteration
+
+VERIFY: π(Bull)    == AggressiveEquity
+VERIFY: π(Bear)    == Defensive
+VERIFY: π(Crisis)  == CashAndGold
+VERIFY: V(Bull)    > V(Bear)
+VERIFY: V(Crisis)  < V(Sideways)

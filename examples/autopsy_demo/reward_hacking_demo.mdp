@@ -1,0 +1,66 @@
+# reward_hacking_demo.mdp — Phase 3A autopsy demo: reward hacking.
+#
+# Two paths from Start:
+#   (a) A long path to Goal that gives +50 once.
+#   (b) A short cycle S2 -> S3 -> S2 that gives +4 per loop forever.
+#
+# Under γ = 0.95, the cycle's geometric value is 4 / (1 - 0.95^2) ≈ 41.0
+# per cycle's worth of staying, which we then sum to infinity = 4/(1-0.95^2) ≈ 41.
+# Wait — that's lower than 50. Let me make it more attractive: cycle reward 12.
+# Then cycle value = 12 / (1 - 0.95^2) ≈ 123, definitely > 50.
+#
+# Expected: RewardHacking ERROR detected, cycle path printed.
+
+STATE: Start
+STATE: S2
+STATE: S3
+STATE: S4
+STATE: Goal
+
+ACTION: GoToCycle
+ACTION: TraverseCycle
+ACTION: GoToGoal
+ACTION: Stay
+
+# From Start: agent can enter the cycle via S2, or take the goal path via S4.
+TRANSITION: Start  GoToCycle      S2    1.0
+TRANSITION: Start  TraverseCycle  Start 1.0
+TRANSITION: Start  GoToGoal       S4    1.0
+TRANSITION: Start  Stay           Start 1.0
+
+# S2 <-> S3 — the cycle.
+TRANSITION: S2 TraverseCycle  S3    1.0
+TRANSITION: S2 GoToCycle      S2    1.0
+TRANSITION: S2 GoToGoal       S2    1.0
+TRANSITION: S2 Stay           S2    1.0
+TRANSITION: S3 TraverseCycle  S2    1.0
+TRANSITION: S3 GoToCycle      S3    1.0
+TRANSITION: S3 GoToGoal       S3    1.0
+TRANSITION: S3 Stay           S3    1.0
+
+# S4 -> Goal (the legitimate path).
+TRANSITION: S4 GoToGoal       Goal  1.0
+TRANSITION: S4 TraverseCycle  S4    1.0
+TRANSITION: S4 GoToCycle      S4    1.0
+TRANSITION: S4 Stay           S4    1.0
+
+# Goal is terminal-ish (self-loop, but no further reward).
+TRANSITION: Goal Stay          Goal 1.0
+TRANSITION: Goal TraverseCycle Goal 1.0
+TRANSITION: Goal GoToCycle     Goal 1.0
+TRANSITION: Goal GoToGoal      Goal 1.0
+
+# Reward structure:
+#   Goal gives +50 once via ACTION_REWARD on arrival, then 0 (absorbing).
+#   The cycle gives +12 every time the agent does TraverseCycle in S2 or S3.
+#   Cycle infinite-horizon discounted value at γ=0.95:
+#     V_cycle = 12 / (1 - 0.95^2) ≈ 123
+#   Goal one-shot value from Start: γ^2 * 50 = 0.9025 * 50 ≈ 45.
+#   So cycle (123) >> goal (45) → reward hacking is the rational choice.
+ACTION_REWARD: S2 TraverseCycle 12.0
+ACTION_REWARD: S3 TraverseCycle 12.0
+ACTION_REWARD: S4 GoToGoal      50.0
+# No state reward on Goal (terminal absorbing zero-reward state).
+
+DISCOUNT: 0.95
+SOLVER:   value_iteration

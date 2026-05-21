@@ -1,0 +1,32 @@
+# dead_state_demo.mdp — Phase 3A autopsy demo: dead state detection.
+#
+# Three states with positive flow (Start, Hall, Goal). Two orphan states
+# (Trap1, Trap2) form a self-loop with no escape to anything rewarding.
+# The autopsy should detect Trap1 and Trap2 as dead.
+
+STATE: Start
+STATE: Hall
+STATE: Goal
+STATE: Trap1
+STATE: Trap2
+
+ACTION: Forward
+ACTION: Linger
+
+TRANSITION: Start  Forward Hall   1.0
+TRANSITION: Start  Linger  Start  1.0
+TRANSITION: Hall   Forward Goal   1.0
+TRANSITION: Hall   Linger  Hall   1.0
+TRANSITION: Goal   Forward Goal   1.0
+TRANSITION: Goal   Linger  Goal   1.0
+
+# The dead pair only cycles among themselves.
+TRANSITION: Trap1  Forward Trap2  1.0
+TRANSITION: Trap1  Linger  Trap1  1.0
+TRANSITION: Trap2  Forward Trap1  1.0
+TRANSITION: Trap2  Linger  Trap2  1.0
+
+REWARD: Goal  10.0
+
+DISCOUNT: 0.9
+SOLVER:   value_iteration

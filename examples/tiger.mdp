@@ -1,0 +1,73 @@
+# tiger.mdp — The canonical POMDP benchmark (Cassandra et al., 1994).
+# A tiger is behind one of two doors. Listen or open one.
+#
+# State is hidden (POMDP): the agent maintains a belief over {TigerLeft,
+# TigerRight} and updates it via noisy "HearLeft" / "HearRight" observations.
+# Optimal policy: keep listening until belief is strongly biased one way,
+# then open the OTHER door (the door away from the heard direction).
+
+STATE: TigerLeft
+STATE: TigerRight
+
+ACTION: Listen
+ACTION: OpenLeft
+ACTION: OpenRight
+
+# Listen never changes the underlying state.
+TRANSITION: TigerLeft  Listen    TigerLeft  1.0
+TRANSITION: TigerRight Listen    TigerRight 1.0
+# Opening a door resets the world (tiger placed uniformly at random again).
+TRANSITION: TigerLeft  OpenLeft  TigerLeft  0.5
+TRANSITION: TigerLeft  OpenLeft  TigerRight 0.5
+TRANSITION: TigerRight OpenLeft  TigerLeft  0.5
+TRANSITION: TigerRight OpenLeft  TigerRight 0.5
+TRANSITION: TigerLeft  OpenRight TigerLeft  0.5
+TRANSITION: TigerLeft  OpenRight TigerRight 0.5
+TRANSITION: TigerRight OpenRight TigerLeft  0.5
+TRANSITION: TigerRight OpenRight TigerRight 0.5
+
+OBSERVATION: HearLeft
+OBSERVATION: HearRight
+
+# Listening is informative (85% accurate).
+OBSERVE_PROB: TigerLeft  Listen    HearLeft  0.85
+OBSERVE_PROB: TigerLeft  Listen    HearRight 0.15
+OBSERVE_PROB: TigerRight Listen    HearLeft  0.15
+OBSERVE_PROB: TigerRight Listen    HearRight 0.85
+# Opening a door yields no useful observation (uniform).
+OBSERVE_PROB: TigerLeft  OpenLeft  HearLeft  0.5
+OBSERVE_PROB: TigerLeft  OpenLeft  HearRight 0.5
+OBSERVE_PROB: TigerRight OpenLeft  HearLeft  0.5
+OBSERVE_PROB: TigerRight OpenLeft  HearRight 0.5
+OBSERVE_PROB: TigerLeft  OpenRight HearLeft  0.5
+OBSERVE_PROB: TigerLeft  OpenRight HearRight 0.5
+OBSERVE_PROB: TigerRight OpenRight HearLeft  0.5
+OBSERVE_PROB: TigerRight OpenRight HearRight 0.5
+
+# Per-state-action rewards (the only ones that matter).
+ACTION_REWARD: TigerLeft  OpenLeft  -100.0
+ACTION_REWARD: TigerRight OpenLeft    10.0
+ACTION_REWARD: TigerLeft  OpenRight   10.0
+ACTION_REWARD: TigerRight OpenRight -100.0
+ACTION_REWARD: TigerLeft  Listen      -1.0
+ACTION_REWARD: TigerRight Listen      -1.0
+
+INITIAL_BELIEF: TigerLeft  0.5
+INITIAL_BELIEF: TigerRight 0.5
+
+BELIEF_STATE: Uniform         TigerLeft:0.5   TigerRight:0.5
+BELIEF_STATE: AlmostSureLeft  TigerLeft:0.97  TigerRight:0.03
+
+DISCOUNT: 0.95
+SOLVER: pbvi
+ALPHA_VECTORS: 30
+PBVI_ITERATIONS: 200
+
+# Optimal policy under the canonical Tiger reward structure (Cassandra '94)
+# with γ=0.95:
+#   - At a uniform / near-uniform belief: Listen (gather information).
+#   - At a high-confidence belief (b(TigerLeft) ≥ ~0.97): open the OTHER
+#     door (the one without the tiger). With AlmostSureLeft at 0.97/0.03,
+#     OpenRight is optimal.
+VERIFY: π(Uniform) == Listen
+VERIFY: π(AlmostSureLeft) == OpenRight

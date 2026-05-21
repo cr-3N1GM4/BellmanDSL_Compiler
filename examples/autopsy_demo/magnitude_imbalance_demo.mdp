@@ -1,0 +1,26 @@
+# magnitude_imbalance_demo.mdp — Phase 3A autopsy demo.
+#
+# Safety penalty is 0.001 next to a goal reward of 1000. Contribution
+# of the safety term: 0.001 / (1000 + 0.001 + 0.5) ≈ 0.0001%, well under
+# the 0.1% ERROR threshold. The solver effectively ignores it.
+
+STATE: Safe
+STATE: Risky
+STATE: Goal
+
+ACTION: Stay
+ACTION: Advance
+
+TRANSITION: Safe   Stay    Safe   1.0
+TRANSITION: Safe   Advance Risky  1.0
+TRANSITION: Risky  Stay    Risky  1.0
+TRANSITION: Risky  Advance Goal   1.0
+TRANSITION: Goal   Stay    Goal   1.0
+TRANSITION: Goal   Advance Goal   1.0
+
+REWARD: Goal     1000.0
+REWARD: Safe     0.5
+REWARD: Risky    -0.001    # safety penalty — invisible to solver
+
+DISCOUNT: 0.95
+SOLVER:   value_iteration

@@ -1,0 +1,31 @@
+# broken_for_repair.mdp — Phase 3A REPAIR demo.
+#
+# Three-state corridor. At γ = 0.15, the Goal is too discounted; the
+# agent prefers to Stay at Start (zero per-step) than Move toward Goal
+# (which incurs a per-action cost). REPAIR should propose either:
+#   - raising γ above some threshold, or
+#   - reducing the Move cost.
+
+STATE: Start
+STATE: Middle
+STATE: Goal
+
+ACTION: Move
+ACTION: Stay
+
+TRANSITION: Start  Move  Middle 1.0
+TRANSITION: Start  Stay  Start  1.0
+TRANSITION: Middle Move  Goal   1.0
+TRANSITION: Middle Stay  Middle 1.0
+TRANSITION: Goal   Move  Goal   1.0
+TRANSITION: Goal   Stay  Goal   1.0
+
+REWARD: Goal 100.0
+
+ACTION_REWARD: Start  Move -5.0
+ACTION_REWARD: Middle Move -5.0
+ACTION_REWARD: Start  Stay  0.0
+ACTION_REWARD: Middle Stay  0.0
+
+DISCOUNT: 0.15
+SOLVER:   value_iteration

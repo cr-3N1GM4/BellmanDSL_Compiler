@@ -1,0 +1,81 @@
+# myopic_corridor.mdp — Phase 3A autopsy demo: reward myopia + discount cliff.
+#
+# A 10-state linear corridor. The agent starts at Start. Only Goal has a
+# positive reward (+100). Every other state has a small step penalty of -1.
+#
+# With γ = 0.40, the effective horizon is log(0.001)/log(0.40) ≈ 7.5 steps,
+# but the Goal is 9 steps from Start. The agent cannot perceive the goal
+# gradient. The Discount Cliff sweep should find a γ* in [0.65, 0.80] where
+# the policy flips from "Left" (give up) to "Right" (pursue goal).
+#
+# Expected --diagnose findings:
+#   - RewardMyopia ERROR (effective horizon < goal distance)
+#   - DiscountCliff WARN/INFO (a phase transition exists in the gamma sweep)
+
+STATE: Start
+STATE: S1
+STATE: S2
+STATE: S3
+STATE: S4
+STATE: S5
+STATE: S6
+STATE: S7
+STATE: Goal
+
+ACTION: Right
+ACTION: Left
+
+# Right moves forward toward goal; Left moves backward (or self-loops at Start).
+TRANSITION: Start  Right  S1    1.0
+TRANSITION: Start  Left   Start 1.0
+TRANSITION: S1     Right  S2    1.0
+TRANSITION: S1     Left   Start 1.0
+TRANSITION: S2     Right  S3    1.0
+TRANSITION: S2     Left   S1    1.0
+TRANSITION: S3     Right  S4    1.0
+TRANSITION: S3     Left   S2    1.0
+TRANSITION: S4     Right  S5    1.0
+TRANSITION: S4     Left   S3    1.0
+TRANSITION: S5     Right  S6    1.0
+TRANSITION: S5     Left   S4    1.0
+TRANSITION: S6     Right  S7    1.0
+TRANSITION: S6     Left   S5    1.0
+TRANSITION: S7     Right  Goal  1.0
+TRANSITION: S7     Left   S6    1.0
+TRANSITION: Goal   Right  Goal  1.0
+TRANSITION: Goal   Left   Goal  1.0
+
+# Per-step penalty for everything except Goal.
+REWARD: Start  -1.0
+REWARD: S1     -1.0
+REWARD: S2     -1.0
+REWARD: S3     -1.0
+REWARD: S4     -1.0
+REWARD: S5     -1.0
+REWARD: S6     -1.0
+REWARD: S7     -1.0
+REWARD: Goal  100.0
+
+# Asymmetric action cost: going Right costs more than Left. This creates
+# a real choice: at low gamma the agent prefers cheap Left moves; at high
+# gamma the goal payoff dominates and Right wins. The cliff is where these
+# cross.
+ACTION_REWARD: Start  Right -2.0
+ACTION_REWARD: S1     Right -2.0
+ACTION_REWARD: S2     Right -2.0
+ACTION_REWARD: S3     Right -2.0
+ACTION_REWARD: S4     Right -2.0
+ACTION_REWARD: S5     Right -2.0
+ACTION_REWARD: S6     Right -2.0
+ACTION_REWARD: S7     Right -2.0
+ACTION_REWARD: Start  Left   0.0
+ACTION_REWARD: S1     Left   0.0
+ACTION_REWARD: S2     Left   0.0
+ACTION_REWARD: S3     Left   0.0
+ACTION_REWARD: S4     Left   0.0
+ACTION_REWARD: S5     Left   0.0
+ACTION_REWARD: S6     Left   0.0
+ACTION_REWARD: S7     Left   0.0
+
+DISCOUNT: 0.30
+SOLVER:   value_iteration

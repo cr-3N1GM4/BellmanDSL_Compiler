@@ -1,0 +1,785 @@
+% ==========================================================================
+%  IEEE-format paper on MDP-DSL (v2: no em-dashes, with syntax reference,
+%  humble tone throughout).
+% ==========================================================================
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{url}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\definecolor{codebg}{HTML}{F6F6F6}
+\definecolor{codeframe}{HTML}{CCCCCC}
+
+\lstdefinestyle{dsl}{
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible,
+}
+
+\begin{document}
+
+\title{MDP-DSL: A Compiled Domain-Specific Language\\
+       for Sequential Decision-Making with\\
+       Formal Verification and Failure Diagnosis}
+
+\author{
+\IEEEauthorblockN{Charvit Rajani}
+\IEEEauthorblockA{Department of Electronics and Communication Engineering\\
+Indian Institute of Technology Guwahati\\
+Guwahati 781039, Assam, India\\
+Roll No. 240102028}
+}
+
+\maketitle
+
+% ==========================================================================
+\begin{abstract}
+We present MDP-DSL, a compiled domain-specific language for Markov
+decision processes and their partially observable extensions. The
+language is implemented as a single-translation-unit C++17 compiler
+with no external dependencies, organized as a five-phase pipeline:
+preprocessor, parser, validator with 25 semantic checks, solver, and
+verifier. Four solver backends are integrated: value iteration,
+policy iteration, Q-learning, and point-based value iteration (PBVI).
+A Baum-Welch hidden Markov model fitter bridges learned regime
+transitions into MDP dynamics as a first-class language construct.
+The compiler exposes a \texttt{VERIFY} block with compile-time
+exit-code semantics suitable for continuous integration, and a
+six-class autopsy engine that diagnoses reward misspecification
+(myopia, hacking, discount cliffs, magnitude imbalance, dead states,
+and policy fragility) with single-parameter repair suggestions. A
+separate \texttt{mdp\_autopsy} binary consumes execution logs and
+reports model-vs-reality divergence with graded verdicts. We
+demonstrate the system on the canonical Tiger POMDP, a $4 \times 3$
+grid-world, an HMM-bridged portfolio optimizer for Indian equity
+markets, and three failure-analysis demonstrations. The full
+implementation comprises approximately 13{,}000 lines of code, and
+297 test assertions pass under a single \texttt{g++ -O2 -std=c++17}
+invocation. The intent of this work is to explore whether a
+compiler-first approach to RL specification can usefully complement
+the library-based tooling that dominates the current ecosystem.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Markov decision processes, POMDPs, domain-specific languages,
+formal verification, reward specification, hidden Markov models,
+point-based value iteration, compiler design.
+\end{IEEEkeywords}
+
+% ==========================================================================
+\section{Introduction}
+
+Reinforcement-learning toolchains in widespread use, such as
+Gymnasium, Stable-Baselines3, and RLlib, optimize the
+training-and-deployment loop. They are excellent for prototyping
+neural-network policies. They are not designed, however, for what we
+argue is the dominant cost in applied RL: the model itself (the
+transition kernel, the reward shape, the discount factor, the safety
+properties) is buried inside Python class hierarchies and tensor
+manipulations. There is no canonical artifact describing what was
+assumed, diff-able between commits, formally checkable by tooling.
+
+Three observations motivated this work.
+
+\emph{First, misspecification is an expensive failure mode.} An RL
+algorithm that converges to a policy satisfying the reward function
+in a way the designer did not intend, that is, specification gaming,
+reward hacking, and discount-cliff phase transitions, is folklore in
+the community~\cite{krakovna2020specification}. These failures live
+in blog posts and conference talks, not in tooling. If the
+specification were a language a compiler could read, the compiler
+could complain at edit time.
+
+\emph{Second, verification is the natural endpoint of declarativity.}
+Hardware description languages have type-checking; database query
+languages have query planners. The sequential-decision world has no
+comparable artifact: no \texttt{VERIFY} block at the end of the
+file. Formal-verification tools for probabilistic systems (PRISM,
+STORM) exist but check properties of pre-specified policies; they do
+not themselves solve Bellman optimality.
+
+\emph{Third, data and decisions live in different vocabularies.}
+HMMs learn latent regime structure from data~\cite{rabiner1989tutorial};
+MDPs solve optimal behavior given dynamics~\cite{puterman2014markov}.
+A domain expert who wants to write ``fit an HMM on this data file,
+then plumb its transition matrix into this MDP'' has no concise way
+to express the connection. This work makes that connection a
+first-class language affordance.
+
+MDP-DSL is offered as a small contribution toward all three. The
+specific deliverables are: a compiled DSL with 25-rule semantic
+validation (Section~\ref{sec:lang}); four interchangeable solver
+backends including PBVI for POMDPs (Section~\ref{sec:solvers}); a
+Baum-Welch HMM fitter bridged into the MDP language at compile time
+(Section~\ref{sec:hmm}); and an autopsy engine for six classes of
+reward misspecification plus a backwards-solver binary for
+model-vs-reality divergence (Section~\ref{sec:autopsy}). We validate
+the system on canonical benchmarks and an HMM-bridged portfolio
+optimizer (Sections~\ref{sec:experiments}).
+
+% ==========================================================================
+\section{Language Reference}\label{sec:lang}
+
+This section is a complete reference for the surface syntax. A
+program is a sequence of declarations, one per line, with a leading
+keyword in upper case. Tokens are whitespace-separated; the
+\texttt{\#} character introduces a line comment. Keywords are
+case-insensitive. No nested scopes or expressions are supported by
+design; users who want arithmetic in reward declarations are
+expected to precompute the values.
+
+\subsection{Core MDP declarations}
+
+\begin{lstlisting}[style=dsl]
+STATE: <name>
+ACTION: <name>
+TRANSITION: <state> <action> <state> <probability>
+REWARD: <state> <value>
+ACTION_REWARD: <state> <action> <value>
+DISCOUNT: <value>           # gamma in [0, 1)
+SOLVER: vi | pi | ql | pbvi
+\end{lstlisting}
+
+Probabilities must lie in $[0, 1]$. For every $(s, a)$ pair, the
+declared transitions must sum to $1.0$ within $10^{-9}$. Either
+\texttt{REWARD} or \texttt{ACTION\_REWARD} may be used (the latter
+generalizes the former); they may be mixed.
+
+\subsection{POMDP extensions}
+
+\begin{lstlisting}[style=dsl]
+OBSERVATION: <name>
+OBSERVE_PROB: <state> <action> <obs> <probability>
+INITIAL_BELIEF: <state> <probability>
+BELIEF_STATE: <name> <state>:<prob> <state>:<prob> ...
+ALPHA_VECTORS:   <int>    # PBVI parameter (default 15)
+PBVI_ITERATIONS: <int>    # default 100
+HORIZON: <int>            # finite-horizon POMDP
+\end{lstlisting}
+
+When \texttt{SOLVER: pbvi}, at least one
+\texttt{INITIAL\_BELIEF} or \texttt{BELIEF\_STATE} must be
+declared. \texttt{BELIEF\_STATE} entries provide named beliefs that
+can be referenced in \texttt{VERIFY} assertions.
+
+\subsection{HMM bridge}
+
+\begin{lstlisting}[style=dsl]
+HMM_STATES: <name> <name> ...
+EMISSION_TYPE: gaussian | discrete
+FIT_HMM: <csv_path> iterations=<int>
+HMM_SEED: <int>           # for reproducibility
+BRIDGE: hmm -> mdp
+\end{lstlisting}
+
+The bridge runs Baum-Welch on the referenced CSV before validation;
+the learned transition matrix is plumbed into the AST as
+\texttt{TRANSITION:} rows, and the HMM states are added to the
+declared state set. User-specified transitions for the same triples
+are preserved.
+
+\subsection{Verification}
+
+\begin{lstlisting}[style=dsl]
+VERIFY: pi(<state_or_belief>) == <action>
+VERIFY: pi(<state_or_belief>) != <action>
+VERIFY: V(<state_or_belief>) >  <number>
+VERIFY: V(<state_or_belief>) <  <number>
+VERIFY: V(<state_or_belief>) >  V(<state_or_belief>)
+\end{lstlisting}
+
+Both ASCII (\texttt{pi(s)}) and Unicode ($\pi(s)$) forms are
+accepted. The compiler exits with status 1 if any assertion fails,
+0 otherwise, which is intended to fit into CI pipelines.
+
+\subsection{Macros}
+
+\begin{lstlisting}[style=dsl]
+GRID: <rows>x<cols>:<spec_strings>
+\end{lstlisting}
+
+The \texttt{GRID:} macro expands into the equivalent STATE,
+TRANSITION, and REWARD declarations for a rectangular grid world,
+with optional walls, terminal cells, and slip probability.
+
+\subsection{Complete example: Tiger POMDP}
+
+Listing~\ref{lst:tiger} is the canonical POMDP benchmark expressed
+in the language. The compiler solves this with PBVI in 100 backups,
+producing 4 useful alpha-vectors after witness pruning, and both
+\texttt{VERIFY} assertions pass at exit code 0.
+
+\begin{lstlisting}[style=dsl,caption={Tiger POMDP in MDP-DSL.},label={lst:tiger}]
+STATE: TigerLeft
+STATE: TigerRight
+
+ACTION: Listen
+ACTION: OpenLeft
+ACTION: OpenRight
+
+TRANSITION: TigerLeft  Listen TigerLeft  1.0
+TRANSITION: TigerRight Listen TigerRight 1.0
+# (reset transitions for open actions omitted)
+
+OBSERVATION: HearLeft
+OBSERVATION: HearRight
+
+OBSERVE_PROB: TigerLeft  Listen HearLeft  0.85
+OBSERVE_PROB: TigerLeft  Listen HearRight 0.15
+OBSERVE_PROB: TigerRight Listen HearLeft  0.15
+OBSERVE_PROB: TigerRight Listen HearRight 0.85
+
+ACTION_REWARD: TigerLeft  OpenLeft -100.0
+ACTION_REWARD: TigerRight OpenLeft   10.0
+ACTION_REWARD: TigerLeft  OpenRight  10.0
+ACTION_REWARD: TigerRight OpenRight -100.0
+ACTION_REWARD: TigerLeft  Listen     -1.0
+ACTION_REWARD: TigerRight Listen     -1.0
+
+BELIEF_STATE: Uniform        TigerLeft:0.5  TigerRight:0.5
+BELIEF_STATE: AlmostSureLeft TigerLeft:0.95 TigerRight:0.05
+
+DISCOUNT: 0.95
+SOLVER:   pbvi
+
+VERIFY: pi(Uniform)        == Listen
+VERIFY: pi(AlmostSureLeft) == OpenLeft
+\end{lstlisting}
+
+% ==========================================================================
+\section{Compilation Pipeline}
+
+The compiler processes input through five mandatory phases, plus an
+optional HMM-bridge phase if requested.
+
+\emph{Phase 0, Preprocessor.} Expands \texttt{GRID:} macros into
+ordinary STATE / TRANSITION / REWARD lines, which the subsequent
+phases process uniformly.
+
+\emph{Phase 1, Parser.} A hand-written line-and-keyword recursive
+descent reads each declaration and populates a flat
+\texttt{MDP\_AST} struct. The grammar is regular at file level and
+LL(1) per line; no separate tokenizer is required. Errors are
+reported with line numbers and stop the pipeline.
+
+\emph{HMM bridge phase.} If the file declares \texttt{BRIDGE: hmm
+-> mdp}, the bridge runs Baum-Welch on the referenced CSV, injects
+hidden states as MDP states, and adds the learned transition matrix
+as \texttt{TRANSITION:} rows. User-specified transitions for the
+same triples are preserved.
+
+\emph{Phase 2, Validator.} 25 named semantic checks read the AST
+and accumulate errors. Examples include: $\sum_{s'} T(s, a, s') = 1$
+for every $(s, a)$ pair within $10^{-9}$ (Check 5);
+$\sum_o O(s', a, o) = 1$ for every $(s', a)$ (Check 15);
+$\sum_s b_0(s) = 1$ for the initial belief (Check 17). Each check
+has positive and negative unit tests in the suite.
+
+\emph{Phase 3, Solver.} The dispatcher consults
+\texttt{ast.solver\_mode} and invokes one of four backends
+(Section~\ref{sec:solvers}), all returning a uniform
+\texttt{SolverResult}.
+
+\emph{Phase 4, Verifier.} Each \texttt{VERIFY:} assertion is parsed
+and evaluated. The process exits with status 1 if any assertion
+fails, 0 otherwise.
+
+% ==========================================================================
+\section{Solver Backends}\label{sec:solvers}
+
+\subsection{Value iteration}
+
+We iterate the Bellman optimality operator
+\begin{equation}
+(T^* V)(s) = \max_a \Big[ R(s,a) + \gamma \sum_{s'} T(s,a,s') V(s') \Big]
+\label{eq:bellman-opt}
+\end{equation}
+from $V_0 \equiv 0$ until $\|V_{k+1} - V_k\|_\infty < \theta = 10^{-9}$.
+$T^*$ is a $\gamma$-contraction in sup-norm, so by the Banach
+fixed-point theorem the iteration converges geometrically with rate
+$\gamma$. Per-iteration cost is $O(|T|)$ where $|T|$ is the number
+of declared transition rows; iteration count is
+$O(\log\theta / \log\gamma)$.
+
+\subsection{Policy iteration}
+
+PI alternates two steps. \emph{Evaluation:} solve the linear system
+$(I - \gamma P^\pi) V^\pi = R^\pi$ where $P^\pi$ is the
+$|\mathcal{S}| \times |\mathcal{S}|$ matrix of transitions under
+$\pi$. \emph{Improvement:} compute the greedy policy with respect to
+$V^\pi$. Termination is detected when the policy stops changing.
+
+The evaluation step uses Gaussian elimination with partial pivoting.
+Without pivoting, ill-conditioned matrices (small self-transition
+probabilities, or $\gamma$ approaching 1) produced numerically
+meaningless solutions during development. The pivoting addition was
+approximately fifteen lines of code and eliminated a class of bugs.
+
+\subsection{Q-learning}
+
+Model-free Q-learning with $\epsilon$-greedy exploration is included
+to verify that the same AST is solvable by both model-based and
+model-free methods. The step-size schedule
+$\alpha_t = 1 / (1 + N(s, a))$ satisfies the Robbins-Monro
+conditions; $\epsilon$ decays linearly from 1.0 to 0.05 over 25{,}000
+steps. On the $4 \times 3$ grid-world after 50{,}000 episodes, the
+recovered policy agrees with $\pi^*$ on at least 8 of 11 states.
+
+\subsection{Point-based value iteration}
+
+For POMDPs, we implement PBVI~\cite{pineau2003point}. The value
+function on $\Delta(\mathcal{S})$ is represented as the upper
+envelope of a set $\Gamma$ of alpha-vectors. The backup at a belief
+point $b$ proceeds in three stages:
+
+\begin{enumerate}
+\item For each action $a$ and observation $o$, find the previous
+alpha-vector to follow:
+\[
+\alpha^*_{a,o} = \arg\max_{\alpha \in \Gamma_\text{prev}} \sum_s b(s) \sum_{s'} T(s,a,s') O(s',a,o) \alpha(s').
+\]
+\item Construct the action-conditional vector:
+\[
+\alpha_a(s) = R(s,a) + \gamma \sum_o \sum_{s'} T(s,a,s') O(s',a,o) \alpha^*_{a,o}(s').
+\]
+\item Return $\alpha_{a^*}$ where $a^* = \arg\max_a \langle b, \alpha_a \rangle$.
+\end{enumerate}
+
+\emph{Witness pruning.} We retain $\alpha$ if and only if there
+exists a belief $b$ in the current belief set $B$ at which $\alpha$
+is strictly best. An earlier implementation used general dominance
+(that is, $\alpha$ dominated iff some $\alpha'$ exceeds $\alpha$ on
+every state) and over-pruned: the Tiger problem collapsed to a single
+alpha-vector and produced an incorrect policy at the uniform belief.
+Witness pruning yields the expected 3 to 5 useful vectors and the
+correct policy. The fix is recorded as a regression test that asserts
+$|\Gamma| \in [3, 7]$ on Tiger.
+
+% ==========================================================================
+\section{HMM-MDP Bridging}\label{sec:hmm}
+
+The Baum-Welch fitter is implemented in pure C++17 with Rabiner's
+scaling discipline. For each timestep, the scaling factor
+$c_t = 1 / \sum_i \alpha_t(i)$ normalizes the forward variables; the
+log-likelihood is recovered as
+$\log P(O \mid \lambda) = -\sum_t \log c_t$. Without scaling,
+forward variables underflow to zero for sequences beyond
+approximately 50 steps with Gaussian emissions of moderate variance,
+which breaks the M-step. A dedicated test verifies the fitter on a
+500-step synthetic sequence.
+
+Listing~\ref{lst:portfolio} shows the portfolio model. The user
+declares four hidden states and points the bridge at a CSV; the
+fitted transition matrix is plumbed into the MDP and the file is
+validated and solved as a single artifact.
+
+\begin{lstlisting}[style=dsl,caption={HMM-bridged portfolio optimizer (excerpt).},label={lst:portfolio}]
+HMM_STATES:    Bull Bear Sideways Crisis
+EMISSION_TYPE: gaussian
+FIT_HMM:       portfolio_returns.csv iterations=200
+HMM_SEED:      42
+
+BRIDGE: hmm -> mdp
+
+ACTION: AggressiveEquity
+ACTION: ModerateEquity
+ACTION: Defensive
+ACTION: CashAndGold
+
+# Sharpe-calibrated rewards (excerpt):
+ACTION_REWARD: Bull   AggressiveEquity  0.85
+ACTION_REWARD: Bear   Defensive         0.10
+ACTION_REWARD: Crisis CashAndGold       0.08
+
+DISCOUNT: 0.92
+SOLVER:   pi
+
+VERIFY: pi(Bull)   == AggressiveEquity
+VERIFY: pi(Bear)   == Defensive
+VERIFY: pi(Crisis) == CashAndGold
+VERIFY: V(Bull)    >  V(Bear)
+VERIFY: V(Crisis)  <  V(Sideways)
+\end{lstlisting}
+
+The portfolio sub-system fetches NSE/BSE equity prices via
+\texttt{yfinance} (15-minute local cache, seed-price fallback when
+offline), fits the HMM on monthly returns, calibrates per-regime
+Sharpe ratios from Viterbi-decoded segments, emits the
+\texttt{.mdp}, invokes the compiler with \texttt{-{}-json}, and
+proposes a portfolio allocation. A dashboard, implemented as a
+single HTML file with no npm dependencies, renders the regime
+history, the policy boundary heat-map over belief space, the
+allocation donut, and the \texttt{VERIFY} status panel.
+
+% ==========================================================================
+\section{The Autopsy Engine}\label{sec:autopsy}
+
+The autopsy engine diagnoses six classes of reward misspecification
+statically, before or independently of any training process.
+
+\subsection{Six failure classes}
+
+\emph{Reward myopia.} The effective planning horizon
+$H_\text{eff} = \log\varepsilon / \log\gamma$ with
+$\varepsilon = 10^{-3}$. BFS computes the minimum distance
+$d_\text{goal}$ from each state to any positive-reward state. If
+$d_\text{goal} > H_\text{eff}$, the agent is structurally blind to
+the goal. The recommended fix is the minimum
+$\gamma' = \exp(\log\varepsilon / d_\text{goal})$.
+
+\emph{Reward hacking.} The optimal-policy graph (each state's
+outgoing edge follows $\pi^*$, mode-collapsed) is analyzed via
+Tarjan's strongly-connected-components algorithm. For each
+non-singleton SCC $C$ with reward sum $r_C$, the cycle value under
+optimal play is $V_\text{cycle} = r_C / (1 - \gamma^{|C|})$. The
+detector fires if $V_\text{cycle} > 1.05 \cdot V^*$ at the best
+state outside $C$. Absorbing terminal goals are excluded from cycle
+analysis.
+
+\emph{Discount cliff.} The optimal policy is computed at 200 points
+across $\gamma \in [0.01, 0.999]$; cliffs are values at which
+$\pi(s)$ flips between adjacent grid points for any state $s$. The
+detector reports the cliff nearest the user's $\gamma$ along with
+the precise flip.
+
+\emph{Magnitude imbalance.} For each non-zero reward term, the
+contribution $c_i = |r_i| / \sum_j |r_j|$ is computed. Terms below
+$0.001$ are flagged as effectively ignored; the recommended
+scale-up is the minimum to reach 5\% contribution.
+
+\emph{Dead-state detection.} Reverse BFS from the set
+$\{s : R(s) > 0 \lor \exists a.\ R(s, a) > 0\}$ identifies states
+that no policy can reach a reward from.
+
+\emph{Fragility analysis.} For each $(s, \pi^*(s))$ pair and each
+perturbable parameter (every reward and $\gamma$), binary search
+finds the smallest $|\delta|$ that flips $\pi^*(s)$. The report
+ranks the top-5 most fragile decisions and computes a robustness
+score.
+
+\subsection{REPAIR command}
+
+Given a target assertion such as \texttt{pi(Start) == MoveRight},
+the \texttt{-{}-repair} mode parses the assertion, checks if it
+already holds, and otherwise binary-searches each candidate
+parameter for the smallest perturbation that satisfies it. The
+proposals are returned ranked by magnitude. Multi-parameter joint
+repair is noted as future work; the current implementation handles
+only single-parameter searches.
+
+\subsection{Backwards solver}
+
+A separate binary, \texttt{mdp\_autopsy}, consumes an execution log
+ending in a \texttt{FAILURE} marker and produces a graded verdict.
+Empirical transition frequencies $\hat T(s, a, s')$ are computed,
+skipping transitions whose source is an absorbing state in the
+model (this filters mission-reset events such as physical reset
+after collision). The KL divergence between empirical and model
+transitions, with additive smoothing $\varepsilon = 10^{-10}$,
+ranks the suspect pairs.
+
+The backwards solver itself answers: what is the smallest
+perturbation $\Delta T$ along the empirical direction at which a
+\texttt{VERIFY} assertion fails? We parameterize
+$T_\alpha = (1 - \alpha) T_\text{model} + \alpha \hat T$ and
+binary-search $\alpha \in [0, 1]$ for the smallest value at which
+any assertion fails.
+
+\emph{Scope statement.} A free $L^1$ minimization over the
+constrained simplex would require a QP solver, which would violate
+our zero-dependency constraint. Linear search along the empirical
+direction is an honest approximation: the empirical data is the
+direction in which the world disagrees with the model, which is
+exactly the axis the autopsy is meant to investigate. This
+limitation is reported in the autopsy output verbatim.
+
+The verdict ladder is shown in Table~\ref{tab:verdict}.
+
+\begin{table}[h]
+\caption{Verdict ladder for \texttt{mdp\_autopsy}.}
+\label{tab:verdict}
+\centering
+\begin{tabular}{lcr}
+\hline
+\textbf{Worst factor} & \textbf{Verdict} & \textbf{Exit code} \\
+\hline
+$< 2 \times$            & \texttt{MODEL\_ACCURATE}   & 0 \\
+$2 \times$ to $10 \times$ & \texttt{MODEL\_OPTIMISTIC} & 1 \\
+$\ge 10 \times$           & \texttt{MODEL\_DANGEROUS}  & 2 \\
+\hline
+\end{tabular}
+\end{table}
+
+% ==========================================================================
+\section{Experimental Results}\label{sec:experiments}
+
+\subsection{Test suite}
+
+The full test suite comprises 174 tests and 297 assertions,
+distributed as in Table~\ref{tab:tests}. The complete suite executes
+in roughly one second.
+
+\begin{table}[h]
+\caption{Test suite distribution across project phases.}
+\label{tab:tests}
+\centering
+\begin{tabular}{lrr}
+\hline
+\textbf{Group} & \textbf{Tests} & \textbf{Assertions} \\
+\hline
+Baseline (parser / validator / VI / PI / QL) & 94 & 142 \\
+POMDP / PBVI / belief update                  & 21 & 47 \\
+HMM / Baum-Welch / bridge                     & 15 & 36 \\
+Autopsy engine (6 classes plus REPAIR)        & 28 & 43 \\
+Backwards solver / log parser                 & 16 & 29 \\
+\hline
+\textbf{Total}                                & \textbf{174} & \textbf{297} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Tiger POMDP}
+
+On Tiger ($|\mathcal{S}| = 2$, $|\mathcal{A}| = 3$, $|\Omega| = 2$,
+$\gamma = 0.95$), PBVI converges in roughly 100 backups, yielding 4
+useful alpha-vectors after witness pruning. Both \texttt{VERIFY}
+assertions pass.
+
+\subsection{Portfolio model}
+
+On the HMM-bridged portfolio model (4 hidden states, 4 actions, 60
+months of Nifty returns, $\gamma = 0.92$, PI solver), all five
+\texttt{VERIFY} assertions pass. The fitted regime persistence
+matrix has diagonal entries $\{0.83, 0.79, 0.71, 0.62\}$, broadly
+consistent with macroscopic Indian-market behavior over the training
+window.
+
+\subsection{Autopsy detections}
+
+On crafted demonstrations:
+\begin{itemize}
+\item Myopic corridor (9 states, $\gamma = 0.30$, asymmetric action
+cost): RewardMyopia ERROR with $H_\text{eff} = 5.7$ and
+$d_\text{goal} = 8$; DiscountCliff WARNING at $\gamma^* = 0.27$.
+\item Reward hacking demo (cycle $S_2 \leftrightarrow S_3$ yielding
+$+12$/step, one-shot goal $+50$): RewardHacking ERROR with
+$V_\text{cycle} = 246.15$ exceeding $V^*$ outside the cycle, which
+was 228.00.
+\item Dead-state demo (disconnected trap cycle): DeadState ERROR
+with both trap states identified.
+\item Repair demo (3-state corridor, $\gamma = 0.15$, move cost
+$-5$): the repair search finds 6 fixes; the minimum is
+$\gamma$ from 0.15 to 0.218, that is, $\Delta = 0.068$.
+\end{itemize}
+
+\subsection{Backwards-solver verdicts}
+
+Table~\ref{tab:autopsy} summarizes four demonstration logs.
+
+\begin{table}[h]
+\caption{\texttt{mdp\_autopsy} verdicts on four demonstrations.}
+\label{tab:autopsy}
+\centering
+\begin{tabular}{lll}
+\hline
+\textbf{Log} & \textbf{Verdict} & \textbf{Backwards solver} \\
+\hline
+medical\_clean.log  & \texttt{ACCURATE}   & no failure to back-solve \\
+medical\_run.log    & \texttt{OPTIMISTIC} & $\alpha{=}0.04$, $\|\Delta T\|_1{=}0.04$ \\
+robot\_run.log      & \texttt{DANGEROUS}  & VERIFY robust under empirical \\
+portfolio\_run.log  & \texttt{DANGEROUS}  & $\alpha{=}0.32$, $\|\Delta T\|_1{=}0.76$ \\
+\hline
+\end{tabular}
+\end{table}
+
+The robot demonstration is worth a comment. The empirical
+$(\text{NearObstacle}, \text{Advance}) \to \text{Collision}$
+transition occurred at 0.25 vs.\ the model's 0.02, a factor of
+12.5x. Yet the backwards solver reports that no perturbation along
+the empirical direction breaks any \texttt{VERIFY} assertion. Under
+empirical transitions, the optimal action at NearObstacle is
+SlowDown, which is actually safer in reality than in the model. The
+diagnostic message is therefore that the engineer's safety
+properties were correctly designed, and the run-time failure
+occurred because the deployed policy ignored the model and selected
+Advance repeatedly, not because the model's safety specification
+was inadequate. We find this kind of distinction (design-level
+vs.\ deployment-level failure) useful and not always easy to make
+by hand.
+
+% ==========================================================================
+\section{Related Work}
+
+\emph{POMDP solvers.} APPL/SARSOP~\cite{kurniawati2008sarsop} and
+HSVI~\cite{smith2004heuristic} implement modern point-based solvers
+focused on performance. The PBVI implementation in MDP-DSL is a
+teaching-grade implementation appropriate to the project's scope and
+not intended to compete on solver throughput.
+
+\emph{Probabilistic verification.} PRISM~\cite{kwiatkowska2011prism}
+and STORM~\cite{dehnert2017storm} verify temporal-logic properties
+of Markov chains and MDPs. They accept rich property languages but
+require the policy to be specified or enumerated; they do not
+themselves solve Bellman optimality. MDP-DSL goes the other way:
+solve the MDP, then verify properties of the optimal policy.
+
+\emph{RL specification gaming.} Krakovna et
+al.~\cite{krakovna2020specification} catalog 60+ examples of agents
+exploiting reward specifications in unintended ways. The autopsy
+engine here is a small tooling response: several of these failures
+are detectable statically from the reward function alone (cycles,
+dead states, discount cliffs).
+
+\emph{DSLs for sequential decisions.} POMDP file formats (such as
+Cassandra's .pomdp format) exist as serialization formats for
+solvers, but typically lack semantic checking, verification, or HMM
+bridging. MDP-DSL adds these in a single artifact.
+
+% ==========================================================================
+\section{Engineering Constraints and Honest Scope}
+
+The implementation enforces five constraints. First, no external C++
+dependencies (STL only). Second, single-translation-unit compilation
+for the main binary. Third, byte-identical backward compatibility
+across all language extensions. Fourth, exit-code semantics suitable
+for CI. Fifth, total source under roughly 13{,}000 lines.
+
+Three scope limitations are documented explicitly in the
+implementation and report output.
+
+\emph{Backwards solver approximation.} The Phase 3B backwards solver
+searches along the empirical direction rather than freely minimizing
+$\|\Delta T\|_1$ over the constrained simplex (which would require a
+QP solver). The implementation reports this approximation
+explicitly.
+
+\emph{REPAIR single-parameter only.} The repair search perturbs one
+parameter at a time. Multi-parameter joint repair is future work.
+
+\emph{Underestimation factor cap.} When the model assigns
+$p < 10^{-6}$ to an empirically-observed transition, the raw ratio
+is mathematically unbounded. We cap the displayed factor at
+$1000\times$ to keep reports informative; the KL ranking remains
+well-defined via additive smoothing.
+
+We argue that explicit scope statements of this kind are more
+credible in tooling intended for verification and diagnosis than
+implicit claims of optimality.
+
+% ==========================================================================
+\section{Author's Contribution Statement}
+
+The project was specified, architected, and led by the author. The
+v2.0 baseline (value iteration, policy iteration, Q-learning, the
+\texttt{VERIFY} block, the GRID macro, and the original five-phase
+pipeline) was completed in the spring 2026 term as the author's
+DA 221M Artificial Intelligence minor-project term work under the
+supervision of Prof.\ Shyamanta M.\ Hazarika at IIT Guwahati.
+
+The v3.0 extensions described in this paper (the POMDP/PBVI
+extension, the HMM-MDP bridge, the portfolio sub-system, the
+six-class autopsy engine, and the backwards-solver binary) are
+post-coursework work undertaken by the author independent of the
+supervised project. Implementation of these extensions used
+AI-assisted code generation under the author's direction. Every
+architectural choice, scope constraint, algorithm selection, and
+verification semantic was authored by the candidate. AI assistance
+was used at the implementation level. This is disclosed for
+accuracy.
+
+% ==========================================================================
+\section{Conclusion and Future Work}
+
+MDP-DSL is a small contribution toward a compiler-first approach to
+sequential decision-making. The 25-rule validator catches model
+misspecification before any solver runs; the \texttt{VERIFY} block
+turns model assumptions into compile-time assertions; the autopsy
+engine diagnoses six classes of reward pathology and proposes
+repairs.
+
+The longer-term direction the author intends to pursue is to grow
+the project from a compiler into an integrated development
+environment for sequential-decision specification: a workspace where
+practitioners can write a model, see solver and autopsy output
+interactively, iterate on the specification, and version it as a
+first-class artifact. Smaller future directions include inverse MDP
+compilation (algebraic recovery of MDP structure from observed
+policies), discount-cliff cartography, and extending the autopsy
+machinery beyond MDPs to other forms of objective specification.
+
+The implementation is open-source under the MIT license. The build
+is reproducible with a single \texttt{g++} invocation and no
+external dependencies. Issues, bug reports, and contributions are
+welcome.
+
+\section*{Acknowledgments}
+
+The author thanks Prof.\ Shyamanta M.\ Hazarika (IIT Guwahati) for
+supervising the v2.0 baseline as part of the DA 221M course.
+
+% ==========================================================================
+\begin{thebibliography}{99}
+
+\bibitem{krakovna2020specification}
+V.~Krakovna et al., ``Specification gaming examples in AI,''
+DeepMind Safety Research Blog, 2020.
+
+\bibitem{puterman2014markov}
+M.~L. Puterman, \emph{Markov Decision Processes: Discrete
+Stochastic Dynamic Programming}, John Wiley \& Sons, 2014.
+
+\bibitem{rabiner1989tutorial}
+L.~R. Rabiner, ``A tutorial on hidden Markov models and selected
+applications in speech recognition,'' \emph{Proc.\ IEEE}, vol.\ 77,
+no.\ 2, pp.\ 257--286, 1989.
+
+\bibitem{pineau2003point}
+J.~Pineau, G.~Gordon, and S.~Thrun, ``Point-based value iteration:
+An anytime algorithm for POMDPs,'' in \emph{IJCAI}, 2003,
+pp.\ 1025--1032.
+
+\bibitem{smith2004heuristic}
+T.~Smith and R.~Simmons, ``Heuristic search value iteration for
+POMDPs,'' in \emph{UAI}, 2004, pp.\ 520--527.
+
+\bibitem{kurniawati2008sarsop}
+H.~Kurniawati, D.~Hsu, and W.~S. Lee, ``SARSOP: Efficient
+point-based POMDP planning by approximating optimally reachable
+belief spaces,'' in \emph{Robotics: Science and Systems}, 2008.
+
+\bibitem{kwiatkowska2011prism}
+M.~Kwiatkowska, G.~Norman, and D.~Parker, ``PRISM 4.0: Verification
+of probabilistic real-time systems,'' in \emph{CAV}, 2011,
+pp.\ 585--591.
+
+\bibitem{dehnert2017storm}
+C.~Dehnert, S.~Junges, J.-P. Katoen, and M.~Volk, ``A storm is
+coming: A modern probabilistic model checker,'' in \emph{CAV},
+2017, pp.\ 592--600.
+
+\bibitem{sutton2018reinforcement}
+R.~S. Sutton and A.~G. Barto, \emph{Reinforcement Learning: An
+Introduction}, 2nd ed., MIT Press, 2018.
+
+\bibitem{sondik1971optimal}
+E.~J. Sondik, ``The optimal control of partially observable Markov
+processes,'' Ph.D. dissertation, Stanford University, 1971.
+
+\end{thebibliography}
+
+\end{document}

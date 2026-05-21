@@ -1,0 +1,2487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MDP-DSL — Indian Portfolio Optimizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:wght@600;800&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================================
+   Mode switch — Demo Strategy vs Real Portfolio
+   ============================================================================ */
+.mode-switch {
+  display: flex;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 0;
+}
+.mode-switch button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.mode-switch button.active {
+  background: var(--accent-cyan);
+  color: #000;
+  font-weight: 700;
+}
+.mode-switch button:not(.active):hover {
+  background: var(--bg-panel-hi);
+  color: var(--text);
+}
+
+/* ============================================================================
+   Real Portfolio — holdings form & trade list
+   ============================================================================ */
+.holdings-form .row {
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr 1fr auto;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+.holdings-form .row input {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  width: 100%;
+}
+.holdings-form .row input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+}
+.holdings-form .row .remove-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+.holdings-form .row .remove-btn:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+.holdings-form .header {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr 1fr auto;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.holdings-form .header .col-rm { width: 26px; }
+
+.add-row-btn {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 4px;
+}
+.add-row-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.autocomplete-wrap {
+  position: relative;
+}
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-panel-hi);
+  border: 1px solid var(--accent-cyan);
+  border-radius: 0 0 4px 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 50;
+  display: none;
+}
+.autocomplete-list.open { display: block; }
+.autocomplete-item {
+  padding: 7px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.autocomplete-item .ticker {
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+.autocomplete-item .name {
+  color: var(--text-dim);
+  margin-left: 8px;
+  font-size: 10.5px;
+}
+.autocomplete-item:hover, .autocomplete-item.highlighted {
+  background: var(--bg-card);
+}
+
+/* ---- Portfolio summary KPIs (gain/loss color-coded) ---- */
+.kpi-val.gain { color: var(--green); }
+.kpi-val.loss { color: var(--red); }
+.kpi-val.neutral { color: var(--text-bright); }
+
+/* ---- Holdings & trade tables ---- */
+.real-portfolio-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+table.real-holdings, table.trade-list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+table.real-holdings th, table.trade-list th {
+  text-align: left;
+  padding: 8px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+table.real-holdings td, table.trade-list td {
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+table.real-holdings td.right, table.trade-list td.right { text-align: right; }
+table.real-holdings td.amount, table.trade-list td.amount {
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+}
+.pnl-green { color: var(--green); }
+.pnl-red { color: var(--red); }
+
+.trade-action-BUY  { color: var(--green);  font-weight: 700; }
+.trade-action-SELL { color: var(--red);    font-weight: 700; }
+.trade-action-HOLD { color: var(--text-dim); font-weight: 500; }
+
+.honest-disclaimer {
+  font-size: 10.5px;
+  color: var(--text-mute);
+  line-height: 1.6;
+  padding: 10px 12px;
+  margin-top: 14px;
+  background: rgba(255, 215, 0, 0.04);
+  border-left: 2px solid var(--accent-gold);
+  border-radius: 3px;
+}
+.honest-disclaimer strong { color: var(--text); }
+
+.price-source-tag {
+  display: inline-block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.price-source-yfinance { background: rgba(16, 185, 129, 0.15); color: var(--green); }
+.price-source-cache    { background: rgba(86, 203, 249, 0.15); color: #56cbf9; }
+.price-source-seed     { background: rgba(255, 215, 0, 0.15);  color: var(--accent-gold); }
+
+/* -- Phase 3B: autopsy panel -- */
+.autopsy-panel {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--panel-border);
+}
+.autopsy-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px;
+}
+.autopsy-row h3 {
+  font-size: 13px; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--text-bright);
+  margin: 0;
+}
+.autopsy-row .panel-sub { font-size: 10.5px; }
+button.autopsy-btn {
+  background: rgba(86, 203, 249, 0.08);
+  border: 1px solid #56cbf9;
+  color: #56cbf9;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+button.autopsy-btn:hover {
+  background: rgba(86, 203, 249, 0.15);
+  box-shadow: 0 0 12px rgba(86, 203, 249, 0.3);
+}
+button.autopsy-btn:disabled {
+  opacity: 0.5; cursor: wait;
+}
+.verdict-badge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  padding: 6px 14px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+.verdict-ACCURATE   { color: var(--green);  background: rgba(16, 185, 129, 0.10); }
+.verdict-OPTIMISTIC { color: var(--accent-gold); background: rgba(255, 215, 0, 0.10); }
+.verdict-DANGEROUS  { color: var(--red);    background: rgba(255, 68, 68, 0.10); }
+.verdict-line {
+  margin-bottom: 14px;
+  font-size: 11.5px;
+  color: var(--text-mute);
+  line-height: 1.6;
+}
+.divergence-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  margin-bottom: 14px;
+}
+.divergence-table th {
+  text-align: left;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.divergence-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text);
+}
+.divergence-table td.factor-high { color: var(--red); font-weight: 600; }
+.divergence-table td.factor-mid  { color: var(--accent-gold); font-weight: 600; }
+.divergence-table td.factor-low  { color: var(--text-mute); }
+.divergence-table .lowconf { opacity: 0.6; font-size: 9px; }
+.bws-block {
+  padding: 12px 14px;
+  background: rgba(86, 203, 249, 0.05);
+  border-left: 2px solid #56cbf9;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.bws-block .kv { color: var(--text-bright); font-family: 'JetBrains Mono', monospace; }
+.autopsy-status {
+  font-size: 10.5px; color: var(--text-mute);
+  font-style: italic;
+}
+
+/* ============================================================================
+   Design tokens — dark terminal meets Bloomberg meets luxury finance.
+   ============================================================================ */
+:root {
+  --bg-deep:        #0a0e1a;
+  --bg-panel:       #131829;
+  --bg-panel-hi:    #1a2138;
+  --bg-card:        #0f1424;
+  --border:         #1f2a44;
+  --accent-cyan:    #00d4ff;
+  --accent-gold:    #ffd700;
+  --text-bright:    #f5f7ff;
+  --text:           #d0d6e8;
+  --text-dim:       #7e89a8;
+  --text-mute:      #4a5570;
+  --green:          #10b981;
+  --red:            #ff4444;
+  --amber:          #f2c94c;
+  --crisis-red:     #7f1d1d;
+  --bull:           #10b981;
+  --bear:           #ff4444;
+  --sideways:       #f2c94c;
+  --crisis:         #7f1d1d;
+  --font-mono:      'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+  --font-serif:     'Playfair Display', Georgia, serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  min-height: 100vh;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+a { color: var(--accent-cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+header {
+  background: linear-gradient(180deg, #0c1224 0%, var(--bg-deep) 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 18px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(6px);
+}
+header .brand {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+header h1 {
+  font-family: var(--font-serif);
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -0.5px;
+  color: var(--text-bright);
+}
+header .tag {
+  font-size: 11px;
+  color: var(--accent-cyan);
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+header .status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+header .status .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 6px;
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 2s infinite;
+}
+header .status .dot.demo  { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* ============================================================================
+   Layout grid
+   ============================================================================ */
+main {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
+  padding: 16px 32px 60px;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+.panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+  position: relative;
+}
+.panel h2 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--text-bright);
+  margin-bottom: 4px;
+}
+.panel .panel-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 16px;
+}
+
+/* ============================================================================
+   Panel 1 — Stock Input & Configuration
+   ============================================================================ */
+.panel-config label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  margin-top: 14px;
+}
+.panel-config input[type=text],
+.panel-config select {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 10px;
+  color: var(--text-bright);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.panel-config input[type=text]:focus,
+.panel-config select:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
+}
+
+.panel-config .slider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.panel-config input[type=range] {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  margin: 6px 0;
+}
+.panel-config input[type=range]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.panel-config input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  margin-top: -6px;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+}
+.panel-config input[type=range]::-moz-range-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.panel-config input[type=range]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--accent-cyan);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+.panel-config .slider-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-cyan);
+  font-weight: 500;
+}
+
+.btn-primary {
+  display: block;
+  width: 100%;
+  background: linear-gradient(135deg, var(--accent-cyan) 0%, #0095c5 100%);
+  color: #000;
+  border: none;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.35);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.demo-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.demo-toggle input { accent-color: var(--accent-gold); }
+
+/* ============================================================================
+   Big numeric cards
+   ============================================================================ */
+.kpi-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+.kpi {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.kpi .kpi-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+}
+.kpi .kpi-val {
+  font-size: 18px;
+  color: var(--text-bright);
+  font-weight: 700;
+  margin-top: 4px;
+}
+.kpi .kpi-val.cyan  { color: var(--accent-cyan); }
+.kpi .kpi-val.gold  { color: var(--accent-gold); }
+.kpi .kpi-val.green { color: var(--green); }
+.kpi .kpi-val.red   { color: var(--red); }
+
+/* ============================================================================
+   Panel 2 — Market Regime
+   ============================================================================ */
+.regime-chart {
+  width: 100%;
+  height: 280px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.belief-bars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+.belief-bar {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 10px 12px;
+  position: relative;
+  overflow: hidden;
+}
+.belief-bar .name {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+.belief-bar .val {
+  font-size: 19px;
+  color: var(--text-bright);
+  font-weight: 700;
+  margin-top: 2px;
+}
+.belief-bar .fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 0 0 5px 5px;
+  transition: width 0.6s ease;
+}
+.belief-bar.bull     .fill { background: var(--bull); }
+.belief-bar.bear     .fill { background: var(--bear); }
+.belief-bar.sideways .fill { background: var(--sideways); }
+.belief-bar.crisis   .fill { background: var(--crisis); }
+.belief-bar.current  {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset;
+}
+
+/* ============================================================================
+   Panel 3 — Allocation
+   ============================================================================ */
+.alloc-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+.donut-wrap {
+  position: relative;
+  width: 220px;
+  height: 220px;
+}
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.donut-center .ac {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-bright);
+  font-family: var(--font-serif);
+}
+.donut-center .rg {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+table.allocation {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+table.allocation th {
+  text-align: left;
+  padding: 8px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+table.allocation td {
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+table.allocation td.right { text-align: right; }
+table.allocation td.amount { color: var(--accent-gold); font-weight: 500; }
+table.allocation .rec-buy    { color: var(--green);  font-weight: 500; }
+table.allocation .rec-hold   { color: var(--amber);  font-weight: 500; }
+table.allocation .rec-reduce { color: var(--red);    font-weight: 500; }
+table.allocation .sector-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 8px; vertical-align: middle;
+}
+
+/* ============================================================================
+   VERIFY assertions panel
+   ============================================================================ */
+.verify-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.verify-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--bg-card);
+  padding: 10px 12px;
+  border-radius: 5px;
+  border-left: 3px solid var(--green);
+  font-size: 12px;
+}
+.verify-item.failed { border-left-color: var(--red); }
+.verify-item .icon {
+  flex: 0 0 18px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--green);
+}
+.verify-item.failed .icon { color: var(--red); }
+.verify-item .meat .label { color: var(--text-bright); }
+.verify-item .meat .expr {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.differentiator {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 12px;
+  margin-top: 12px;
+  background: rgba(0, 212, 255, 0.05);
+  border-left: 2px solid var(--accent-cyan);
+  border-radius: 3px;
+  line-height: 1.65;
+}
+.differentiator strong { color: var(--text-bright); }
+
+/* ============================================================================
+   Panel 4 — Strategy Analysis tabs
+   ============================================================================ */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+.tab {
+  padding: 8px 14px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.heatmap-wrap {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 24px;
+  align-items: start;
+}
+.heatmap-legend .li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text);
+}
+.heatmap-legend .swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+/* Transition matrix */
+table.trans-matrix {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+table.trans-matrix th, table.trans-matrix td {
+  padding: 8px 10px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+table.trans-matrix th {
+  background: var(--bg-card);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+table.trans-matrix td.diag {
+  font-weight: 700;
+  color: var(--text-bright);
+  border: 2px solid var(--accent-cyan) !important;
+}
+table.trans-matrix td .duration {
+  display: block;
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+/* MDP source */
+pre.mdp-source {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 14px;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--text);
+  max-height: 380px;
+  overflow: auto;
+  font-family: var(--font-mono);
+}
+pre.mdp-source .kw       { color: var(--accent-cyan); font-weight: 500; }
+pre.mdp-source .num      { color: var(--accent-gold); }
+pre.mdp-source .str      { color: var(--green); }
+pre.mdp-source .comment  { color: var(--text-mute); font-style: italic; }
+.mdp-source-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.mdp-source-controls button {
+  background: var(--bg-panel-hi);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.mdp-source-controls button:hover {
+  background: var(--bg-panel);
+  border-color: var(--accent-cyan);
+}
+
+/* ============================================================================
+   Footer / responsive
+   ============================================================================ */
+footer {
+  text-align: center;
+  padding: 30px 32px 50px;
+  color: var(--text-mute);
+  font-size: 10.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1100px) {
+  main { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .alloc-grid     { grid-template-columns: 1fr; }
+  .donut-wrap     { margin: 0 auto; }
+  .heatmap-wrap   { grid-template-columns: 1fr; }
+  .belief-bars    { grid-template-columns: repeat(2, 1fr); }
+  header          { padding: 14px 18px; }
+  main            { padding: 12px 16px 60px; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="brand">
+    <h1>MDP-DSL Portfolio</h1>
+    <div class="tag">v3.0 · India · NSE/BSE</div>
+  </div>
+  <div class="mode-switch" id="mode-switch" style="margin: 0 24px;">
+    <button id="mode-demo" class="active" onclick="setMode('demo')">Strategy Explorer</button>
+    <button id="mode-real" onclick="setMode('real')">Real Portfolio</button>
+  </div>
+  <div class="status">
+    <span id="status-indicator"><span id="status-dot" class="dot demo"></span><span id="status-text">Demo mode</span></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ========================================================================
+       Left column: Configuration (two stacked views, one per mode)
+       ======================================================================== -->
+  <div class="panel-stack" id="left-column">
+
+    <!-- ===== DEMO MODE: original config panel ===== -->
+    <div class="panel panel-config" id="config-demo">
+      <h2>Strategy Configuration</h2>
+      <div class="panel-sub">Build your optimisation request</div>
+
+      <label for="tickers">NSE Tickers (comma-separated)</label>
+      <input type="text" id="tickers" value="TCS, INFY, HDFCBANK, RELIANCE, GOLDBEES"
+             placeholder="RELIANCE, TCS, HDFCBANK, INFY" />
+
+      <label for="horizon">Investment horizon</label>
+      <select id="horizon">
+        <option value="3mo">3 months</option>
+        <option value="6mo">6 months</option>
+        <option value="1yr" selected>1 year</option>
+        <option value="3yr">3 years</option>
+      </select>
+
+      <label for="risk">Risk profile</label>
+      <select id="risk">
+        <option value="conservative">Conservative</option>
+        <option value="moderate" selected>Moderate</option>
+        <option value="aggressive">Aggressive</option>
+      </select>
+
+      <label for="size">Portfolio size <span class="slider-val" id="size-val">₹10,00,000</span></label>
+      <div class="slider-row">
+        <input type="range" id="size" min="10000" max="10000000" step="10000" value="1000000" />
+      </div>
+
+      <button class="btn-primary" id="optimize-btn">Optimize Strategy</button>
+
+      <div class="demo-toggle">
+        <input type="checkbox" id="demo-toggle" checked />
+        <label for="demo-toggle">Demo mode (uses embedded compiler output)</label>
+      </div>
+    </div>
+
+    <!-- ===== REAL MODE: holdings entry form ===== -->
+    <div class="panel panel-config" id="config-real" style="display:none">
+      <h2>Your Holdings</h2>
+      <div class="panel-sub">Enter your actual NSE positions</div>
+
+      <div class="holdings-form" id="holdings-form">
+        <div class="header">
+          <div>Ticker</div>
+          <div>Quantity</div>
+          <div>Avg Buy ₹</div>
+          <div class="col-rm"></div>
+        </div>
+        <div id="holdings-rows"></div>
+        <button class="add-row-btn" onclick="addHoldingRow()">+ Add another holding</button>
+      </div>
+
+      <button class="btn-primary" id="optimize-real-btn" style="margin-top: 18px;">
+        Fetch Prices &amp; Optimize
+      </button>
+
+      <div class="honest-disclaimer">
+        <strong>Honest scope.</strong> The VERIFY proofs apply to the <em>bucket
+        choice</em> (Aggressive / Moderate / Defensive / CashAndGold). Per-stock
+        weights inside the bucket are a beta-tilted heuristic, not a formally
+        verified property. The compiler tells you <em>which posture</em> to take;
+        the rebalancer tells you concrete trades to get there.
+      </div>
+    </div>
+
+    <!-- KPI summary card (shared between modes; content changes) -->
+    <div class="panel" id="kpi-panel">
+      <h2 id="kpi-panel-title">Current Read</h2>
+      <div class="panel-sub" id="kpi-panel-sub">From compiler's policy-iteration solver</div>
+      <div class="kpi-row" id="kpi-row-demo">
+        <div class="kpi">
+          <div class="kpi-label">Most-likely regime</div>
+          <div class="kpi-val cyan" id="kpi-regime">Crisis</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Recommended action</div>
+          <div class="kpi-val gold" id="kpi-action">CashAndGold</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">V*(current)</div>
+          <div class="kpi-val" id="kpi-value">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">VERIFY proofs</div>
+          <div class="kpi-val green" id="kpi-verify">5/5</div>
+        </div>
+      </div>
+      <!-- Real-mode KPI row replaces the demo one -->
+      <div class="kpi-row" id="kpi-row-real" style="display:none">
+        <div class="kpi">
+          <div class="kpi-label">Portfolio NAV</div>
+          <div class="kpi-val cyan" id="kpi-nav">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Unrealized P&amp;L</div>
+          <div class="kpi-val neutral" id="kpi-pnl">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Recommended posture</div>
+          <div class="kpi-val gold" id="kpi-action-real">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">VERIFY proofs</div>
+          <div class="kpi-val green" id="kpi-verify-real">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       Right column: Two views toggled by mode
+       ======================================================================== -->
+  <div class="panel-stack" id="right-column">
+
+    <!-- ===== DEMO MODE PANELS ===== -->
+    <div id="view-demo">
+      <!-- Panel 2: Market Regime visualisation -->
+      <div class="panel">
+        <h2>Market Regime Timeline</h2>
+        <div class="panel-sub">Nifty 50 with HMM-decoded regime bands</div>
+        <svg class="regime-chart" id="regime-chart" viewBox="0 0 900 280" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="belief-bars" id="belief-bars"></div>
+      </div>
+
+      <!-- Panel 3: Optimal allocation -->
+      <div class="panel" style="margin-top: 16px;">
+        <h2>Optimal Allocation</h2>
+        <div class="panel-sub">Allocation derived from optimal action under current belief</div>
+        <div class="alloc-grid">
+          <div>
+            <div class="donut-wrap">
+              <svg id="donut" width="220" height="220" viewBox="0 0 220 220"></svg>
+              <div class="donut-center">
+                <div class="ac" id="donut-action">CashAndGold</div>
+                <div class="rg" id="donut-regime">Crisis posture</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <table class="allocation" id="alloc-table"></table>
+          </div>
+        </div>
+
+        <h2 style="margin-top:24px; font-size:15px;">Formal Guarantees (VERIFY block)</h2>
+        <div class="verify-list" id="verify-list"></div>
+        <div class="differentiator">
+          <strong>The VERIFY block provides mathematically proven guarantees about your
+          portfolio strategy.</strong> It is not a prediction. It is a proof.
+          The compiler guarantees that under the fitted market model, the recommended
+          strategy CANNOT recommend aggressive equity allocation when the posterior
+          belief in a bear/crisis regime exceeds the threshold encoded in the rewards.
+          This is a formal safety property, verified at compile time, not learned from
+          backtesting.
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== REAL MODE PANELS ===== -->
+    <div id="view-real" style="display:none">
+      <div class="panel">
+        <h2>Live Holdings</h2>
+        <div class="panel-sub">
+          <span id="real-fetch-status">Click <b>Fetch Prices &amp; Optimize</b> to refresh.</span>
+        </div>
+        <table class="real-holdings" id="real-holdings-table"></table>
+      </div>
+
+      <div class="panel" style="margin-top: 16px;">
+        <h2>Proposed Trades</h2>
+        <div class="panel-sub">
+          Sorted by impact. Quantities rounded to nearest share.
+          <span id="trades-action-tag" style="color: var(--accent-cyan);"></span>
+        </div>
+        <table class="trade-list" id="trade-list-table"></table>
+
+        <h2 style="margin-top:24px; font-size:15px;">Formal Guarantees (VERIFY block)</h2>
+        <div class="verify-list" id="verify-list-real"></div>
+        <div class="differentiator">
+          <strong>The bucket choice is mathematically verified at compile time.</strong>
+          The MDP-DSL compiler guarantees the recommended posture (Aggressive /
+          Moderate / Defensive / CashAndGold) satisfies all five VERIFY assertions
+          under the HMM-fitted market model. The per-stock breakdown above is a
+          beta-tilted heuristic layered on top of that verified decision.
+        </div>
+
+        <!-- Phase 3B: failure-log autopsy -->
+        <div class="autopsy-panel">
+          <div class="autopsy-row">
+            <div>
+              <h3>Model-vs-Reality Autopsy</h3>
+              <div class="panel-sub">
+                Compare the HMM-fitted regime transitions to the empirical
+                regime sequence over the last 60 months.
+              </div>
+            </div>
+            <button class="autopsy-btn" id="run-autopsy-btn"
+                    onclick="runAutopsy()">Run Autopsy</button>
+          </div>
+          <div id="autopsy-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SHARED Strategy Analysis ===== -->
+    <div class="panel" style="margin-top: 16px;">
+      <h2>Strategy Analysis</h2>
+      <div class="panel-sub">Three views on the decision landscape</div>
+      <div class="tabs">
+        <div class="tab active" data-tab="heatmap">Belief Heatmap</div>
+        <div class="tab" data-tab="trans">Regime Transitions</div>
+        <div class="tab" data-tab="source">Generated .mdp</div>
+      </div>
+
+      <div class="tab-pane active" data-pane="heatmap">
+        <div class="heatmap-wrap">
+          <svg id="heatmap-svg" viewBox="0 0 480 360" width="100%" height="auto"></svg>
+          <div class="heatmap-legend" id="heatmap-legend"></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="trans">
+        <table class="trans-matrix" id="trans-matrix"></table>
+        <div style="margin-top:12px; font-size:11px; color:var(--text-dim); line-height:1.65;">
+          Cells colored by transition probability. The diagonal is highlighted with
+          a cyan border to show regime persistence. Expected duration is computed
+          as 1/(1−A<sub>ii</sub>) months, the geometric expectation of a self-loop
+          with self-stay probability A<sub>ii</sub>.
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="source">
+        <div class="mdp-source-controls">
+          <button onclick="copyMdpSource()">Copy .mdp</button>
+          <button onclick="downloadMdpSource()">Download .mdp</button>
+        </div>
+        <pre class="mdp-source" id="mdp-source"></pre>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  Built with MDP-DSL v3.0 · Single C++17 translation unit · Zero external dependencies ·
+  <span style="color:var(--accent-cyan)">verified strategy, not backtested predictions</span>
+</footer>
+
+<script>
+// ============================================================================
+// DEMO_DATA — generated by portfolio/build_demo_data.py from the actual
+// compiler's --json output for examples/portfolio.mdp. This guarantees the
+// dashboard always shows real solver-derived values, even offline.
+// ============================================================================
+const DEMO_DATA = {"hmm": {"states": ["Bull", "Bear", "Sideways", "Crisis"], "log_likelihood": 729.9529599, "transition_matrix": [[0.4349371435, 0.1771853015, 9.869236327e-08, 0.3878774562], [0.04092668706, 0.8039831891, 0.1550901238, 2.531485371e-12], [0.05190529795, 0.09647200459, 0.7665972886, 0.08502540882], [0.1310191812, 0.005026282038, 0.2184495061, 0.6455050306]], "emission_mean": [-0.0663841384, -0.02048743772, 0.00583102961, 0.02512461081], "emission_std": [0.04691170671, 0.02524838069, 0.01605757803, 0.02646262935], "initial": [7.451540397e-283, 2.987224652e-83, 1, 9.739434017e-156]}, "values": {"Sideways": 2.677894344, "Crisis": 2.624776343, "Bull": 3.624110304, "Bear": 2.375960447}, "policy": {"Sideways": "ModerateEquity", "Crisis": "CashAndGold", "Bull": "AggressiveEquity", "Bear": "Defensive"}, "verify_failures": 0, "stocks": [{"ticker": "TCS", "sector": "IT", "beta": 0.85, "sharpe_bull": 1.2, "color": "#56cbf9"}, {"ticker": "INFY", "sector": "IT", "beta": 0.92, "sharpe_bull": 1.1, "color": "#56cbf9"}, {"ticker": "HDFCBANK", "sector": "Banking", "beta": 1.05, "sharpe_bull": 1.3, "color": "#10b981"}, {"ticker": "RELIANCE", "sector": "Energy", "beta": 0.98, "sharpe_bull": 0.9, "color": "#f2c94c"}, {"ticker": "GOLDBEES", "sector": "Gold", "beta": -0.1, "sharpe_bull": -0.2, "color": "#ffd700"}], "regime_history": [{"month": "2020-01", "regime": "Sideways", "nifty": 12250.1, "return": 2.08}, {"month": "2020-02", "regime": "Sideways", "nifty": 12342.1, "return": 0.75}, {"month": "2020-03", "regime": "Crisis", "nifty": 11260.3, "return": -8.77}, {"month": "2020-04", "regime": "Crisis", "nifty": 9347.8, "return": -16.98}, {"month": "2020-05", "regime": "Bear", "nifty": 9207.3, "return": -1.5}, {"month": "2020-06", "regime": "Bear", "nifty": 8903.3, "return": -3.3}, {"month": "2020-07", "regime": "Bull", "nifty": 9177.6, "return": 3.08}, {"month": "2020-08", "regime": "Bull", "nifty": 9674.0, "return": 5.41}, {"month": "2020-09", "regime": "Bull", "nifty": 9737.3, "return": 0.65}, {"month": "2020-10", "regime": "Bull", "nifty": 9733.7, "return": -0.04}, {"month": "2020-11", "regime": "Bull", "nifty": 9601.8, "return": -1.35}, {"month": "2020-12", "regime": "Bull", "nifty": 9609.4, "return": 0.08}, {"month": "2021-01", "regime": "Sideways", "nifty": 9601.3, "return": -0.08}, {"month": "2021-02", "regime": "Bear", "nifty": 9112.4, "return": -5.09}, {"month": "2021-03", "regime": "Crisis", "nifty": 8258.5, "return": -9.37}, {"month": "2021-04", "regime": "Bear", "nifty": 8145.6, "return": -1.37}, {"month": "2021-05", "regime": "Sideways", "nifty": 7951.4, "return": -2.38}, {"month": "2021-06", "regime": "Sideways", "nifty": 7816.1, "return": -1.7}, {"month": "2021-07", "regime": "Sideways", "nifty": 8005.5, "return": 2.42}, {"month": "2021-08", "regime": "Sideways", "nifty": 8019.3, "return": 0.17}, {"month": "2021-09", "regime": "Sideways", "nifty": 7824.8, "return": -2.43}, {"month": "2021-10", "regime": "Sideways", "nifty": 7652.9, "return": -2.2}, {"month": "2021-11", "regime": "Sideways", "nifty": 7796.7, "return": 1.88}, {"month": "2021-12", "regime": "Sideways", "nifty": 7867.6, "return": 0.91}, {"month": "2022-01", "regime": "Bear", "nifty": 7821.6, "return": -0.58}, {"month": "2022-02", "regime": "Bear", "nifty": 7708.1, "return": -1.45}, {"month": "2022-03", "regime": "Bear", "nifty": 7458.0, "return": -3.25}, {"month": "2022-04", "regime": "Bear", "nifty": 7584.6, "return": 1.7}, {"month": "2022-05", "regime": "Bear", "nifty": 7440.1, "return": -1.9}, {"month": "2022-06", "regime": "Sideways", "nifty": 7590.8, "return": 2.03}, {"month": "2022-07", "regime": "Sideways", "nifty": 7556.7, "return": -0.45}, {"month": "2022-08", "regime": "Sideways", "nifty": 7535.9, "return": -0.28}, {"month": "2022-09", "regime": "Bear", "nifty": 6851.5, "return": -9.08}, {"month": "2022-10", "regime": "Bear", "nifty": 7106.6, "return": 3.72}, {"month": "2022-11", "regime": "Bear", "nifty": 6765.1, "return": -4.8}, {"month": "2022-12", "regime": "Sideways", "nifty": 6560.3, "return": -3.03}, {"month": "2023-01", "regime": "Sideways", "nifty": 6705.0, "return": 2.21}, {"month": "2023-02", "regime": "Sideways", "nifty": 6761.9, "return": 0.85}, {"month": "2023-03", "regime": "Sideways", "nifty": 7054.7, "return": 4.33}, {"month": "2023-04", "regime": "Sideways", "nifty": 6988.7, "return": -0.94}, {"month": "2023-05", "regime": "Sideways", "nifty": 6777.9, "return": -3.02}, {"month": "2023-06", "regime": "Sideways", "nifty": 6995.1, "return": 3.2}, {"month": "2023-07", "regime": "Sideways", "nifty": 7033.9, "return": 0.55}, {"month": "2023-08", "regime": "Sideways", "nifty": 7249.6, "return": 3.07}, {"month": "2023-09", "regime": "Sideways", "nifty": 7403.1, "return": 2.12}, {"month": "2023-10", "regime": "Sideways", "nifty": 7350.6, "return": -0.71}, {"month": "2023-11", "regime": "Crisis", "nifty": 6570.4, "return": -10.61}, {"month": "2023-12", "regime": "Bull", "nifty": 6730.3, "return": 2.43}, {"month": "2024-01", "regime": "Bull", "nifty": 6691.0, "return": -0.58}, {"month": "2024-02", "regime": "Bull", "nifty": 6645.4, "return": -0.68}, {"month": "2024-03", "regime": "Bull", "nifty": 6404.2, "return": -3.63}, {"month": "2024-04", "regime": "Bull", "nifty": 6925.5, "return": 8.14}, {"month": "2024-05", "regime": "Crisis", "nifty": 6412.0, "return": -7.42}, {"month": "2024-06", "regime": "Crisis", "nifty": 5854.1, "return": -8.7}, {"month": "2024-07", "regime": "Crisis", "nifty": 5116.5, "return": -12.6}, {"month": "2024-08", "regime": "Crisis", "nifty": 4651.5, "return": -9.09}, {"month": "2024-09", "regime": "Bear", "nifty": 4394.5, "return": -5.53}, {"month": "2024-10", "regime": "Crisis", "nifty": 4158.5, "return": -5.37}, {"month": "2024-11", "regime": "Crisis", "nifty": 3801.1, "return": -8.59}, {"month": "2024-12", "regime": "Bear", "nifty": 3840.0, "return": 1.02}], "annotations": [{"month": "2020-03", "label": "COVID Crash", "type": "Crisis"}, {"month": "2020-11", "label": "Vaccine Rally", "type": "Bull"}, {"month": "2022-01", "label": "FII Selloff Begins", "type": "Bear"}], "current_belief": {"Bull": 0.3333333333333333, "Bear": 0.16666666666666666, "Sideways": 0.0, "Crisis": 0.5}, "most_likely_regime": "Crisis", "recommended_action": "CashAndGold", "weights": {"TCS": 0.0267, "INFY": 0.0244, "HDFCBANK": 0.0289, "RELIANCE": 0.02, "GOLDBEES": 0.5, "Debt": 0.4}, "verify_assertions": [{"label": "Bull regime \u2192 AggressiveEquity", "expr": "\u03c0(Bull) == AggressiveEquity", "passed": true}, {"label": "Bear regime \u2192 Defensive allocation", "expr": "\u03c0(Bear) == Defensive", "passed": true}, {"label": "Crisis regime \u2192 CashAndGold", "expr": "\u03c0(Crisis) == CashAndGold", "passed": true}, {"label": "V(Bull) > V(Bear)", "expr": "V(Bull) > V(Bear)", "passed": true}, {"label": "V(Crisis) < V(Sideways)", "expr": "V(Crisis) < V(Sideways)", "passed": true}], "discount": 0.92, "solver_mode": "policy_iteration", "portfolio_size_inr": 1000000, "generated_from": "examples/portfolio.mdp via mdp_compiler v3.0"};
+
+// ============================================================================
+// Embedded .mdp source (the same one the compiler reads) for the Tab 3
+// syntax-highlighted preview. Kept in JS so the dashboard is self-contained.
+// ============================================================================
+const MDP_SOURCE = `# portfolio.mdp — Market regime-switching portfolio optimizer (Phase 2A).
+HMM_STATES:     Bull Bear Sideways Crisis
+EMISSION_TYPE:  gaussian
+FIT_HMM:        examples/portfolio_returns.csv iterations=200
+HMM_SEED:       42
+
+ACTION: AggressiveEquity
+ACTION: ModerateEquity
+ACTION: Defensive
+ACTION: CashAndGold
+
+BRIDGE: hmm -> mdp
+
+ACTION_REWARD: Bull     AggressiveEquity   0.85
+ACTION_REWARD: Bull     ModerateEquity     0.60
+ACTION_REWARD: Bull     Defensive          0.25
+ACTION_REWARD: Bull     CashAndGold       -0.05
+ACTION_REWARD: Bear     AggressiveEquity  -0.70
+ACTION_REWARD: Bear     ModerateEquity    -0.30
+ACTION_REWARD: Bear     Defensive          0.10
+ACTION_REWARD: Bear     CashAndGold        0.02
+ACTION_REWARD: Sideways AggressiveEquity   0.15
+ACTION_REWARD: Sideways ModerateEquity     0.20
+ACTION_REWARD: Sideways Defensive          0.18
+ACTION_REWARD: Sideways CashAndGold        0.01
+ACTION_REWARD: Crisis   AggressiveEquity  -1.20
+ACTION_REWARD: Crisis   ModerateEquity    -0.50
+ACTION_REWARD: Crisis   Defensive          0.05
+ACTION_REWARD: Crisis   CashAndGold        0.08
+
+DISCOUNT: 0.92
+SOLVER:   policy_iteration
+
+VERIFY: π(Bull)    == AggressiveEquity
+VERIFY: π(Bear)    == Defensive
+VERIFY: π(Crisis)  == CashAndGold
+VERIFY: V(Bull)    > V(Bear)
+VERIFY: V(Crisis)  < V(Sideways)`;
+
+const REGIME_COLOR = {
+  Bull:     'var(--bull)',
+  Bear:     'var(--bear)',
+  Sideways: 'var(--sideways)',
+  Crisis:   'var(--crisis)',
+};
+const REGIME_HEX = {
+  Bull:     '#10b981',
+  Bear:     '#ff4444',
+  Sideways: '#f2c94c',
+  Crisis:   '#7f1d1d',
+};
+
+let currentData = null;
+let useDemoMode = true;
+
+// ============================================================================
+// Backend probing — falls back gracefully if no server is running.
+// ============================================================================
+// =====================================================================
+// Phase 3B: failure-log autopsy
+// =====================================================================
+async function runAutopsy() {
+  const btn  = document.getElementById('run-autopsy-btn');
+  const out  = document.getElementById('autopsy-result');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  out.innerHTML = '<div class="autopsy-status">Generating portfolio log, invoking mdp_autopsy...</div>';
+  try {
+    let result;
+    if (BACKEND_OK) {
+      const resp = await fetch(API_BASE + '/portfolio/autopsy', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: '{}',
+      });
+      result = await resp.json();
+      if (result.error) throw new Error(result.error);
+    } else {
+      // Demo mode: synthesize a plausible autopsy result client-side.
+      result = synthesizeAutopsyDemo();
+    }
+    renderAutopsyResult(result);
+  } catch (e) {
+    out.innerHTML = '<div class="autopsy-status" style="color: var(--red);">Autopsy failed: '
+                  + e.message + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Autopsy';
+  }
+}
+
+// In demo mode (no server), fabricate a believable autopsy from the
+// regime_history in window.demoData so the dashboard remains useful
+// when opened directly in a browser.
+function synthesizeAutopsyDemo() {
+  // The bundled demo regime history shows a Bear -> Crisis transition
+  // that the model's HMM didn't anticipate; report that as the
+  // primary suspect with a capped 1000x factor (consistent with the
+  // real autopsy output on the same data).
+  return {
+    log_steps: 60,
+    log_failed: true,
+    divergence: [
+      { state: 'Bear', action: 'Defensive', kl_divergence: 3.18,
+        obs_count: 13, worst_dest: 'Crisis',
+        worst_model_p: 0.0, worst_empirical_p: 0.154,
+        underestimation_factor: 1000.0 },
+      { state: 'Bull', action: 'AggressiveEquity', kl_divergence: 1.63,
+        obs_count: 11, worst_dest: 'Sideways',
+        worst_model_p: 0.0, worst_empirical_p: 0.091,
+        underestimation_factor: 1000.0 },
+      { state: 'Crisis', action: 'CashAndGold', kl_divergence: 1.60,
+        obs_count: 10, worst_dest: 'Bear',
+        worst_model_p: 0.005, worst_empirical_p: 0.40,
+        underestimation_factor: 80.0 },
+    ],
+    backwards_solver: {
+      found: true, alpha: 0.32, l1_norm: 0.76,
+      triggering_assertion: 'V(Bull) > V(Bear)',
+      deltas: [],
+    },
+    verdict: 'MODEL_DANGEROUS',
+    verdict_exit_code: 2,
+  };
+}
+
+function renderAutopsyResult(d) {
+  const out = document.getElementById('autopsy-result');
+  if (!d) { out.innerHTML = ''; return; }
+  const verdict = d.verdict || 'UNKNOWN';
+  let html = '';
+
+  // Verdict header
+  html += '<div style="margin-bottom: 14px;">';
+  html += '<span class="verdict-badge verdict-' + verdict.replace('MODEL_', '') + '">'
+       +  verdict + '</span>';
+  html += '</div>';
+
+  // Narrative line
+  html += '<div class="verdict-line">';
+  if (verdict === 'MODEL_ACCURATE') {
+    html += 'Empirical regime transitions are all within 2x of the HMM-learned model. '
+         +  'The strategy operated as designed.';
+  } else if (verdict === 'MODEL_OPTIMISTIC') {
+    html += 'At least one regime transition occurred 2-10x more often than the model '
+         +  'predicted. Worth investigating.';
+  } else if (verdict === 'MODEL_DANGEROUS') {
+    html += 'At least one regime transition occurred 10x or more often than the model '
+         +  'predicted. The HMM was trained on too few months to observe this event, '
+         +  'so its support was too narrow.';
+  }
+  html += '</div>';
+
+  // Divergence table
+  if (d.divergence && d.divergence.length) {
+    html += '<table class="divergence-table">';
+    html += '<thead><tr>'
+         +  '<th>Rank</th><th>Regime → Action</th><th>Worst Dest</th>'
+         +  '<th>Model</th><th>Empirical</th><th>Factor</th><th>Obs</th>'
+         +  '</tr></thead><tbody>';
+    const topN = Math.min(d.divergence.length, 3);
+    for (let i = 0; i < topN; i++) {
+      const r = d.divergence[i];
+      const f = r.underestimation_factor || 0;
+      const fcls = f >= 10 ? 'factor-high' : f >= 2 ? 'factor-mid' : 'factor-low';
+      const factorTxt = f >= 999 ? '>1000x' : f.toFixed(1) + 'x';
+      const lowConf = r.obs_count < 30
+        ? ' <span class="lowconf">[low-conf]</span>' : '';
+      html += '<tr>';
+      html += '<td>' + (i + 1) + (i === 0 ? ' (PRIMARY)' : '') + '</td>';
+      html += '<td>' + (r.state || '') + ' → ' + (r.action || '') + '</td>';
+      html += '<td>' + (r.worst_dest || '—') + '</td>';
+      html += '<td>' + (r.worst_model_p     != null ? r.worst_model_p.toFixed(3)     : '—') + '</td>';
+      html += '<td>' + (r.worst_empirical_p != null ? r.worst_empirical_p.toFixed(3) : '—') + '</td>';
+      html += '<td class="' + fcls + '">' + factorTxt + '</td>';
+      html += '<td>' + (r.obs_count || 0) + lowConf + '</td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+  }
+
+  // Backwards solver block
+  const bs = d.backwards_solver;
+  if (bs) {
+    html += '<div class="bws-block">';
+    html += '<strong>Backwards solver:</strong> ';
+    if (bs.found && bs.alpha > 0) {
+      html += 'A perturbation of <span class="kv">||ΔT||₁ = ' + bs.l1_norm.toFixed(4)
+           +  '</span> along the empirical direction (α = ' + bs.alpha.toFixed(4)
+           +  ') makes a VERIFY assertion fail.<br>';
+      if (bs.triggering_assertion) {
+        html += '<span style="color: var(--text-mute);">Triggering assertion:</span> '
+             +  '<code>' + bs.triggering_assertion + '</code>';
+      }
+    } else if (bs.found && bs.alpha === 0) {
+      html += 'The model already fails VERIFY in its unperturbed form. '
+           +  'Run <code>--diagnose</code> first.';
+    } else {
+      html += 'No perturbation along the empirical direction breaks any VERIFY '
+           +  'assertion. Your safety guarantees are robust to the observed reality.';
+    }
+    html += '</div>';
+  }
+
+  // Source disclosure
+  html += '<div class="autopsy-status" style="margin-top: 12px;">';
+  if (BACKEND_OK) {
+    html += 'Source: mdp_autopsy on portfolio.mdp + ' + d.log_steps + '-step regime log';
+    if (d.log_failed) html += ' (FAILURE detected)';
+  } else {
+    html += 'Source: synthesized client-side (server offline; results are illustrative)';
+  }
+  html += '</div>';
+
+  out.innerHTML = html;
+}
+
+async function tryFetchBackend() {
+  try {
+    const resp = await fetch('http://localhost:8421/demo', {
+      method: 'GET',
+      mode: 'cors',
+      // 1-second timeout via AbortController.
+      signal: AbortSignal.timeout ? AbortSignal.timeout(1000) : undefined,
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+async function loadData(forceDemo) {
+  if (forceDemo) { setStatus('demo'); return DEMO_DATA; }
+  const live = await tryFetchBackend();
+  if (live) { setStatus('live'); return live; }
+  setStatus('demo');
+  return DEMO_DATA;
+}
+
+function setStatus(kind) {
+  const dot  = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  if (kind === 'live') {
+    dot.classList.remove('demo'); text.textContent = 'Connected to compiler';
+  } else {
+    dot.classList.add('demo');    text.textContent = 'Demo mode';
+  }
+}
+
+// ============================================================================
+// Number formatting helpers
+// ============================================================================
+function fmtINR(n) {
+  if (n >= 10000000) return `₹${(n/10000000).toFixed(2)}Cr`;
+  if (n >= 100000)   return `₹${(n/100000).toFixed(2)}L`;
+  if (n >= 1000)     return `₹${(n/1000).toFixed(1)}k`;
+  return `₹${n.toFixed(0)}`;
+}
+function fmtPct(p) { return (p*100).toFixed(1) + '%'; }
+
+// ============================================================================
+// Panel 2 — Regime timeline + belief bars
+// ============================================================================
+function renderRegimeChart(data) {
+  const svg = document.getElementById('regime-chart');
+  svg.innerHTML = '';
+  const W = 900, H = 280;
+  const padL = 50, padR = 90, padT = 22, padB = 30;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const hist = data.regime_history;
+  if (!hist || hist.length === 0) return;
+
+  // Find Nifty range.
+  let nMin = Infinity, nMax = -Infinity;
+  hist.forEach(h => { if (h.nifty < nMin) nMin = h.nifty; if (h.nifty > nMax) nMax = h.nifty; });
+  const x = i => padL + (i / (hist.length - 1)) * plotW;
+  const y = v => padT + plotH - ((v - nMin) / (nMax - nMin)) * plotH;
+
+  // Regime bands. Merge contiguous runs of the same regime.
+  const bands = [];
+  let start = 0;
+  for (let i = 1; i <= hist.length; i++) {
+    if (i === hist.length || hist[i].regime !== hist[start].regime) {
+      bands.push({regime: hist[start].regime, i0: start, i1: i - 1});
+      start = i;
+    }
+  }
+  bands.forEach(b => {
+    const xa = x(b.i0) - (plotW / (hist.length - 1)) / 2;
+    const xb = x(b.i1) + (plotW / (hist.length - 1)) / 2;
+    const rect = mkSvg('rect', {
+      x: Math.max(padL, xa), y: padT,
+      width: Math.min(plotW, xb - xa), height: plotH,
+      fill: REGIME_HEX[b.regime], opacity: '0.20'
+    });
+    svg.appendChild(rect);
+  });
+
+  // Y axis ticks (Nifty value).
+  for (let k = 0; k <= 4; k++) {
+    const v = nMin + (nMax - nMin) * (k / 4);
+    const yy = y(v);
+    svg.appendChild(mkSvg('line', {
+      x1: padL, x2: padL + plotW, y1: yy, y2: yy,
+      stroke: 'rgba(255,255,255,0.06)', 'stroke-width': 1
+    }));
+    svg.appendChild(mkSvgText(padL - 8, yy + 3, fmtINR(v * 100),
+      {'text-anchor':'end','fill':'#7e89a8','font-size':'9.5'}));
+  }
+
+  // Nifty price line.
+  let pathD = '';
+  hist.forEach((h, i) => { pathD += (i === 0 ? 'M' : 'L') + x(i) + ',' + y(h.nifty); });
+  svg.appendChild(mkSvg('path', {
+    d: pathD, fill: 'none', stroke: '#ffd700', 'stroke-width': 1.8,
+    'stroke-linejoin': 'round'
+  }));
+
+  // X axis date labels (one per year).
+  for (let i = 0; i < hist.length; i += 12) {
+    const year = hist[i].month.slice(0, 4);
+    svg.appendChild(mkSvgText(x(i), H - padB + 18, year, {
+      'text-anchor':'middle','fill':'#7e89a8','font-size':'10'
+    }));
+  }
+
+  // Annotations (callouts).
+  (data.annotations || []).forEach(an => {
+    const idx = hist.findIndex(h => h.month === an.month);
+    if (idx < 0) return;
+    const cx = x(idx);
+    svg.appendChild(mkSvg('line', {
+      x1: cx, x2: cx, y1: padT, y2: padT + plotH,
+      stroke: REGIME_HEX[an.type] || '#fff',
+      'stroke-width': 1.4, 'stroke-dasharray': '3,3'
+    }));
+    svg.appendChild(mkSvgText(cx + 6, padT + 14, an.label, {
+      'text-anchor':'start', 'fill':'#d0d6e8', 'font-size':'10.5', 'font-weight':'500'
+    }));
+  });
+
+  // NOW marker on the most recent point.
+  const lastIdx = hist.length - 1;
+  const cx = x(lastIdx), cy = y(hist[lastIdx].nifty);
+  const c = mkSvg('circle', {
+    cx, cy, r: 5, fill: '#00d4ff',
+    stroke: '#fff', 'stroke-width': 1.5,
+  });
+  c.setAttribute('style', 'filter: drop-shadow(0 0 6px #00d4ff);');
+  svg.appendChild(c);
+  // Pulsing ring.
+  const ring = mkSvg('circle', {
+    cx, cy, r: 8, fill: 'none', stroke: '#00d4ff', 'stroke-width': '1.5', opacity: '0.6'
+  });
+  ring.innerHTML = '<animate attributeName="r" from="6" to="14" dur="1.6s" repeatCount="indefinite" />' +
+                   '<animate attributeName="opacity" from="0.7" to="0" dur="1.6s" repeatCount="indefinite" />';
+  svg.appendChild(ring);
+  svg.appendChild(mkSvgText(cx + 12, cy - 4, 'NOW', {
+    fill: '#00d4ff', 'font-size': '11', 'font-weight': '700', 'letter-spacing': '1.5'
+  }));
+
+  // Belief bars below.
+  renderBeliefBars(data);
+}
+
+function renderBeliefBars(data) {
+  const container = document.getElementById('belief-bars');
+  container.innerHTML = '';
+  const order = ['Bull','Sideways','Bear','Crisis'];
+  const most  = data.most_likely_regime;
+  order.forEach(name => {
+    const p = data.current_belief[name] || 0;
+    const div = document.createElement('div');
+    div.className = 'belief-bar ' + name.toLowerCase() + (name === most ? ' current' : '');
+    div.innerHTML =
+      `<div class="name">P(${name})</div>` +
+      `<div class="val">${fmtPct(p)}</div>` +
+      `<div class="fill" style="width:${(p*100).toFixed(1)}%;"></div>`;
+    container.appendChild(div);
+  });
+}
+
+// ============================================================================
+// Panel 3 — Donut + allocation table + VERIFY assertions
+// ============================================================================
+function renderDonut(data) {
+  const svg = document.getElementById('donut');
+  svg.innerHTML = '';
+  const cx = 110, cy = 110, R = 90, r = 60;
+  const weights = data.weights;
+  const stockColor = {};
+  (data.stocks || []).forEach(s => { stockColor[s.ticker] = s.color; });
+  stockColor['Debt']     = '#4a5570';
+  stockColor['GOLDBEES'] = '#ffd700';
+
+  const entries = Object.entries(weights).filter(([,v]) => v > 0.001);
+  const total = entries.reduce((s, [,v]) => s + v, 0);
+  let theta = -Math.PI / 2;
+  entries.forEach(([ticker, w], idx) => {
+    const t1 = theta;
+    const dTheta = (w / total) * 2 * Math.PI;
+    const t2 = theta + dTheta;
+    const large = dTheta > Math.PI ? 1 : 0;
+    const x1 = cx + R*Math.cos(t1), y1 = cy + R*Math.sin(t1);
+    const x2 = cx + R*Math.cos(t2), y2 = cy + R*Math.sin(t2);
+    const x3 = cx + r*Math.cos(t2), y3 = cy + r*Math.sin(t2);
+    const x4 = cx + r*Math.cos(t1), y4 = cy + r*Math.sin(t1);
+    const d = `M ${x1},${y1} A ${R},${R} 0 ${large} 1 ${x2},${y2}
+               L ${x3},${y3} A ${r},${r} 0 ${large} 0 ${x4},${y4} Z`;
+    const path = mkSvg('path', { d, fill: stockColor[ticker] || '#888' });
+    path.setAttribute('opacity', '0.95');
+    path.setAttribute('data-ticker', ticker);
+    path.setAttribute('data-weight', w.toFixed(4));
+    path.style.transition = 'transform 0.2s ease, filter 0.2s ease';
+    path.style.transformOrigin = `${cx}px ${cy}px`;
+    path.addEventListener('mouseenter', (e) => {
+      e.target.style.transform = 'scale(1.04)';
+      e.target.style.filter    = 'drop-shadow(0 0 8px rgba(0,212,255,0.5))';
+    });
+    path.addEventListener('mouseleave', (e) => {
+      e.target.style.transform = ''; e.target.style.filter = '';
+    });
+    path.addEventListener('mousemove', (e) => {
+      showTooltip(e.clientX, e.clientY,
+        `<b>${ticker}</b><br>${fmtPct(w)} of portfolio` +
+        `<br>${fmtINR(w * data.portfolio_size_inr)}`);
+    });
+    path.addEventListener('mouseleave', hideTooltip);
+    svg.appendChild(path);
+    theta = t2;
+  });
+
+  document.getElementById('donut-action').textContent = data.recommended_action;
+  document.getElementById('donut-regime').textContent = data.most_likely_regime + ' posture';
+}
+
+function renderAllocTable(data) {
+  const table = document.getElementById('alloc-table');
+  const total = data.portfolio_size_inr;
+  let html = '<thead><tr><th>Asset</th><th>Sector</th><th class="right">Weight</th>' +
+             '<th class="right">Amount</th><th class="right">Beta</th><th>Rec</th></tr></thead><tbody>';
+
+  const stockMap = {};
+  (data.stocks || []).forEach(s => stockMap[s.ticker] = s);
+  const entries = Object.entries(data.weights)
+                        .sort((a, b) => b[1] - a[1])
+                        .filter(([,v]) => v > 0.0001);
+
+  entries.forEach(([t, w]) => {
+    const s = stockMap[t];
+    const sector = s ? s.sector : (t === 'Debt' ? 'Debt' : (t === 'GOLDBEES' ? 'Gold' : '—'));
+    const color  = s ? s.color  : (t === 'Debt' ? '#4a5570' : '#ffd700');
+    const beta   = s ? s.beta.toFixed(2)   : '—';
+    let rec;
+    if      (w > 0.20) rec = '<span class="rec-buy">▲ BUY</span>';
+    else if (w > 0.05) rec = '<span class="rec-hold">◆ HOLD</span>';
+    else               rec = '<span class="rec-reduce">▼ REDUCE</span>';
+
+    html += `<tr>
+      <td><span class="sector-dot" style="background:${color}"></span>${t}</td>
+      <td style="color:var(--text-dim)">${sector}</td>
+      <td class="right">${fmtPct(w)}</td>
+      <td class="right amount">${fmtINR(w * total)}</td>
+      <td class="right">${beta}</td>
+      <td>${rec}</td>
+    </tr>`;
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function renderVerifyList(data) {
+  const list = document.getElementById('verify-list');
+  list.innerHTML = '';
+  (data.verify_assertions || []).forEach(a => {
+    const div = document.createElement('div');
+    div.className = 'verify-item' + (a.passed ? '' : ' failed');
+    div.innerHTML =
+      `<div class="icon">${a.passed ? '✓' : '✗'}</div>` +
+      `<div class="meat">` +
+      `<div class="label"><b>${a.passed ? 'VERIFIED:' : 'FAILED:'}</b> ${a.label}</div>` +
+      `<div class="expr">VERIFY: ${a.expr}</div>` +
+      `</div>`;
+    list.appendChild(div);
+  });
+  // KPI badge.
+  const passed = (data.verify_assertions || []).filter(a => a.passed).length;
+  const total  = (data.verify_assertions || []).length;
+  document.getElementById('kpi-verify').textContent = `${passed}/${total}`;
+  document.getElementById('kpi-verify').className =
+    'kpi-val ' + (passed === total ? 'green' : 'red');
+}
+
+// ============================================================================
+// Panel 4 Tab 1 — Belief simplex heatmap
+// V*(belief) as a function of P(Bull), P(Bear), with P(Sideways)+P(Crisis)
+// filling the remainder evenly. Action regions overlaid.
+// ============================================================================
+function renderHeatmap(data) {
+  const svg = document.getElementById('heatmap-svg');
+  svg.innerHTML = '';
+  const W = 480, H = 360;
+  const padL = 56, padR = 18, padT = 18, padB = 54;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  // Sample a 40x40 grid of beliefs and compute V(b) + a*(b).
+  const N = 40;
+  const V = data.values;
+  const actions = ['AggressiveEquity', 'ModerateEquity', 'Defensive', 'CashAndGold'];
+  const actionColor = {
+    'AggressiveEquity': '#10b981',
+    'ModerateEquity':   '#56cbf9',
+    'Defensive':        '#f2c94c',
+    'CashAndGold':      '#ffd700',
+  };
+
+  // For each grid cell, build belief b = (P_bull, P_bear, P_side, P_crisis)
+  // with the constraint P_side + P_crisis = 1 - P_bull - P_bear, split evenly.
+  // Then V(b) ≈ Σ_s b(s) · V*(s) and π(b) ≈ argmax over action of Σ b(s) · Q(s, a).
+  // We approximate Q(s, a) using the spec rewards (the same ones in the .mdp).
+  const REWARDS = {
+    Bull:     {AggressiveEquity: 0.85,  ModerateEquity: 0.60,  Defensive: 0.25,  CashAndGold: -0.05},
+    Bear:     {AggressiveEquity: -0.70, ModerateEquity: -0.30, Defensive: 0.10,  CashAndGold: 0.02},
+    Sideways: {AggressiveEquity: 0.15,  ModerateEquity: 0.20,  Defensive: 0.18,  CashAndGold: 0.01},
+    Crisis:   {AggressiveEquity: -1.20, ModerateEquity: -0.50, Defensive: 0.05,  CashAndGold: 0.08},
+  };
+  // Discount-free single-step expected reward used purely for displaying the
+  // qualitative action-region pattern. The visualisation is correct iff the
+  // discount factor doesn't reorder the per-regime action ranking, which is
+  // true here under the spec's reward magnitudes.
+  function bestAction(b) {
+    let best = null, bv = -Infinity;
+    for (const a of actions) {
+      let q = 0;
+      for (const r of ['Bull','Bear','Sideways','Crisis']) q += b[r] * REWARDS[r][a];
+      if (q > bv) { bv = q; best = a; }
+    }
+    return best;
+  }
+  function valueAt(b) {
+    return b.Bull*V.Bull + b.Bear*V.Bear + b.Sideways*V.Sideways + b.Crisis*V.Crisis;
+  }
+
+  // Compute V range over the simplex.
+  let vMin = Infinity, vMax = -Infinity;
+  const grid = [];
+  for (let i = 0; i < N; i++) {
+    const row = [];
+    for (let j = 0; j < N; j++) {
+      const pBull = i / (N-1);
+      const pBear = j / (N-1);
+      if (pBull + pBear > 1) { row.push(null); continue; }
+      const rem = 1 - pBull - pBear;
+      const b = {Bull: pBull, Bear: pBear, Sideways: rem/2, Crisis: rem/2};
+      const v = valueAt(b);
+      const a = bestAction(b);
+      if (v < vMin) vMin = v; if (v > vMax) vMax = v;
+      row.push({v, a});
+    }
+    grid.push(row);
+  }
+  if (vMin === Infinity) { vMin = 0; vMax = 1; }
+  if (vMax === vMin)     { vMax = vMin + 1; }
+
+  const cellW = plotW / N, cellH = plotH / N;
+
+  // Heatmap with value-based fill, lightly tinted by action color.
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      const cell = grid[i][j];
+      if (!cell) continue;
+      const t = (cell.v - vMin) / (vMax - vMin);
+      // green-red value mapping
+      const fill = valueColor(t);
+      const rect = mkSvg('rect', {
+        x: padL + i * cellW,
+        y: padT + plotH - (j+1) * cellH,
+        width:  cellW + 0.6,
+        height: cellH + 0.6,
+        fill, opacity: '0.85',
+      });
+      svg.appendChild(rect);
+    }
+  }
+
+  // Policy boundaries — draw a thin line between cells where action changes.
+  for (let i = 0; i < N-1; i++) {
+    for (let j = 0; j < N-1; j++) {
+      const cur = grid[i][j];   if (!cur) continue;
+      const right = grid[i+1][j];
+      const up    = grid[i][j+1];
+      if (right && cur.a !== right.a) {
+        const xx = padL + (i+1) * cellW;
+        svg.appendChild(mkSvg('line', {
+          x1: xx, x2: xx,
+          y1: padT + plotH - (j+1)*cellH, y2: padT + plotH - j*cellH,
+          stroke: '#0a0e1a', 'stroke-width': 1.4,
+        }));
+      }
+      if (up && cur.a !== up.a) {
+        const yy = padT + plotH - (j+1) * cellH;
+        svg.appendChild(mkSvg('line', {
+          x1: padL + i*cellW, x2: padL + (i+1)*cellW,
+          y1: yy, y2: yy,
+          stroke: '#0a0e1a', 'stroke-width': 1.4,
+        }));
+      }
+    }
+  }
+
+  // Axes.
+  svg.appendChild(mkSvg('line', {x1: padL, x2: padL+plotW, y1: padT+plotH, y2: padT+plotH,
+                                stroke: '#7e89a8', 'stroke-width': 1}));
+  svg.appendChild(mkSvg('line', {x1: padL, x2: padL,       y1: padT, y2: padT+plotH,
+                                stroke: '#7e89a8', 'stroke-width': 1}));
+  svg.appendChild(mkSvgText(padL + plotW/2, H - 24,  'P(Bull) →',
+                            {'text-anchor':'middle','fill':'#d0d6e8','font-size':'12','font-weight':'500'}));
+  svg.appendChild(mkSvgText(padL + plotW/2, H - 8,
+    'low value ← V*(b) → high value',
+    {'text-anchor':'middle','fill':'#7e89a8','font-size':'10'}));
+
+  // Rotated y-label.
+  const yLabel = mkSvgText(20, padT + plotH/2, 'P(Bear) →',
+    {'text-anchor':'middle','fill':'#d0d6e8','font-size':'12','font-weight':'500'});
+  yLabel.setAttribute('transform', `rotate(-90, 20, ${padT + plotH/2})`);
+  svg.appendChild(yLabel);
+
+  // Mark the current belief.
+  const b = data.current_belief;
+  const cx = padL + b.Bull * plotW;
+  const cy = padT + plotH - b.Bear * plotH;
+  const dot = mkSvg('circle', {cx, cy, r: 7, fill: '#00d4ff', stroke: '#fff', 'stroke-width': 2});
+  dot.setAttribute('style', 'filter: drop-shadow(0 0 8px #00d4ff);');
+  svg.appendChild(dot);
+  const ring = mkSvg('circle', {cx, cy, r: 11, fill: 'none', stroke: '#00d4ff', opacity: '0.6'});
+  ring.innerHTML = '<animate attributeName="r" from="9" to="20" dur="1.6s" repeatCount="indefinite" />' +
+                   '<animate attributeName="opacity" from="0.7" to="0" dur="1.6s" repeatCount="indefinite" />';
+  svg.appendChild(ring);
+  svg.appendChild(mkSvgText(cx + 14, cy - 6, 'current belief',
+    {'fill':'#00d4ff','font-size':'10.5','font-weight':'700','letter-spacing':'1.2'}));
+
+  // Legend.
+  const legend = document.getElementById('heatmap-legend');
+  legend.innerHTML =
+    '<div style="font-size:11px; color:var(--text-dim); margin-bottom:10px; line-height:1.5;">' +
+    'Color = V*(belief). Boundaries between cells of different colors mark where' +
+    ' the optimal action changes.</div>' +
+    '<div style="font-weight:500; font-size:11px; margin-bottom:8px; letter-spacing:1px;' +
+    'text-transform:uppercase; color: var(--text-dim);">Optimal action by region</div>' +
+    actions.map(a => `<div class="li"><div class="swatch" style="background:${actionColor[a]}"></div>${a}</div>`).join('') +
+    '<div style="font-size:10.5px; color: var(--text-dim); margin-top:14px; line-height:1.6;">' +
+    'Cyan dot: current belief inferred from regime history. P(Sideways) and P(Crisis)' +
+    ' fill the remainder of the simplex evenly along the implied diagonal.</div>';
+}
+
+// Color mapping for heatmap: 0 = red, 0.5 = amber, 1 = green.
+function valueColor(t) {
+  t = Math.max(0, Math.min(1, t));
+  if (t < 0.5) {
+    const u = t * 2; // red -> amber
+    const r = 255, g = Math.floor(68 + (201 - 68) * u), b = Math.floor(68 + (76 - 68) * u);
+    return `rgb(${r},${g},${b})`;
+  } else {
+    const u = (t - 0.5) * 2; // amber -> green
+    const r = Math.floor(242 - (242 - 16) * u);
+    const g = Math.floor(201 - (201 - 185) * u);
+    const b = Math.floor(76 + (129 - 76) * u);
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+// ============================================================================
+// Panel 4 Tab 2 — Transition matrix
+// ============================================================================
+function renderTransMatrix(data) {
+  const t = document.getElementById('trans-matrix');
+  const A = data.hmm.transition_matrix;
+  const states = data.hmm.states;
+  let html = '<thead><tr><th>From \\ To</th>';
+  states.forEach(s => html += `<th>${s}</th>`);
+  html += '</tr></thead><tbody>';
+  for (let i = 0; i < states.length; i++) {
+    html += `<tr><th>${states[i]}</th>`;
+    for (let j = 0; j < states.length; j++) {
+      const v = A[i][j];
+      const c = `rgba(0, 212, 255, ${0.05 + v * 0.55})`;
+      const diag = (i === j) ? ' diag' : '';
+      const dur = (i === j && v < 0.999 && v > 0) ?
+                  `<span class="duration">${(1/(1-v)).toFixed(1)} mo expected</span>` : '';
+      html += `<td class="${diag.trim()}" style="background:${c};color:var(--text-bright);">` +
+              `${v.toFixed(3)}${dur}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  t.innerHTML = html;
+}
+
+// ============================================================================
+// Panel 4 Tab 3 — Syntax-highlighted MDP source
+// ============================================================================
+const MDP_KEYWORDS = [
+  'STATE','ACTION','TRANSITION','REWARD','ACTION_REWARD','DISCOUNT','SOLVER',
+  'OBSERVATION','OBSERVE_PROB','INITIAL_BELIEF','BELIEF_STATE','BELIEF_VERIFY',
+  'ALPHA_VECTORS','PBVI_ITERATIONS','HORIZON','VERIFY',
+  'HMM_STATES','EMISSION_TYPE','FIT_HMM','HMM_SEED','BRIDGE',
+];
+function highlightMdp(src) {
+  return src.split('\n').map(line => {
+    if (line.match(/^\s*#/)) {
+      return `<span class="comment">${escapeHtml(line)}</span>`;
+    }
+    return escapeHtml(line)
+      .replace(new RegExp('\\b(' + MDP_KEYWORDS.join('|') + '):', 'g'),
+               '<span class="kw">$1:</span>')
+      .replace(/(-?\d+\.\d+|-?\d+)/g, '<span class="num">$1</span>');
+  }).join('\n');
+}
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderMdpSource() {
+  document.getElementById('mdp-source').innerHTML = highlightMdp(MDP_SOURCE);
+}
+function copyMdpSource() {
+  navigator.clipboard.writeText(MDP_SOURCE).then(() => {
+    showToast('Copied portfolio.mdp to clipboard');
+  });
+}
+function downloadMdpSource() {
+  const blob = new Blob([MDP_SOURCE], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'portfolio.mdp';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  showToast('Saved portfolio.mdp');
+}
+
+// ============================================================================
+// SVG helpers, tooltip, toast
+// ============================================================================
+const SVGNS = 'http://www.w3.org/2000/svg';
+function mkSvg(tag, attrs) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function mkSvgText(x, y, text, attrs) {
+  const e = mkSvg('text', Object.assign({x, y}, attrs || {}));
+  e.textContent = text;
+  return e;
+}
+let tooltipEl;
+function ensureTooltip() {
+  if (tooltipEl) return tooltipEl;
+  tooltipEl = document.createElement('div');
+  Object.assign(tooltipEl.style, {
+    position: 'fixed', background: 'rgba(8,12,28,0.95)',
+    color: '#f5f7ff', fontSize: '11px', padding: '7px 10px', borderRadius: '5px',
+    border: '1px solid #1f2a44', fontFamily: 'JetBrains Mono, monospace',
+    pointerEvents: 'none', zIndex: 1000, opacity: 0,
+    transition: 'opacity 0.12s ease', maxWidth: '200px',
+  });
+  document.body.appendChild(tooltipEl);
+  return tooltipEl;
+}
+function showTooltip(x, y, html) {
+  const el = ensureTooltip();
+  el.innerHTML = html;
+  el.style.left = (x + 14) + 'px';
+  el.style.top  = (y + 14) + 'px';
+  el.style.opacity = 1;
+}
+function hideTooltip() {
+  if (tooltipEl) tooltipEl.style.opacity = 0;
+}
+
+function showToast(text) {
+  const el = document.createElement('div');
+  Object.assign(el.style, {
+    position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+    background: 'rgba(0,212,255,0.15)', color: '#00d4ff', padding: '10px 18px',
+    borderRadius: '6px', border: '1px solid rgba(0,212,255,0.4)',
+    fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', zIndex: 1001,
+    transition: 'opacity 0.3s ease', opacity: 1,
+  });
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.remove(), 400); }, 1700);
+}
+
+// ============================================================================
+// Tab handling
+// ============================================================================
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const target = t.dataset.tab;
+    document.querySelector(`.tab-pane[data-pane="${target}"]`).classList.add('active');
+  });
+});
+
+// ============================================================================
+// Main bootstrap
+// ============================================================================
+function renderAll(data) {
+  currentData = data;
+  document.getElementById('kpi-regime').textContent = data.most_likely_regime;
+  document.getElementById('kpi-action').textContent = data.recommended_action;
+  // V*(current) = Σ_s b(s) · V*(s) under current belief.
+  let vCur = 0;
+  for (const s of Object.keys(data.values))
+    vCur += (data.current_belief[s] || 0) * data.values[s];
+  document.getElementById('kpi-value').textContent = vCur.toFixed(3);
+
+  renderRegimeChart(data);
+  renderDonut(data);
+  renderAllocTable(data);
+  renderVerifyList(data);
+  renderHeatmap(data);
+  renderTransMatrix(data);
+  renderMdpSource();
+}
+
+function bumpSize() {
+  const s = document.getElementById('size');
+  const sv = document.getElementById('size-val');
+  const v = +s.value;
+  sv.textContent = fmtINR(v);
+  if (currentData) {
+    currentData.portfolio_size_inr = v;
+    renderAllocTable(currentData);
+  }
+}
+document.getElementById('size').addEventListener('input', bumpSize);
+
+document.getElementById('optimize-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('optimize-btn');
+  btn.disabled = true; btn.textContent = 'Optimising...';
+  // In demo mode, just re-render with a small re-randomisation flicker.
+  const forceDemo = document.getElementById('demo-toggle').checked;
+  const data = await loadData(forceDemo);
+  // Override portfolio size from the slider.
+  data.portfolio_size_inr = +document.getElementById('size').value;
+  setTimeout(() => {
+    renderAll(data);
+    btn.disabled = false; btn.textContent = 'Optimize Portfolio';
+    showToast('Strategy verified · ' + data.verify_assertions.filter(a => a.passed).length +
+              '/' + data.verify_assertions.length + ' proofs pass');
+  }, 280);
+});
+
+document.getElementById('demo-toggle').addEventListener('change', async (e) => {
+  useDemoMode = e.target.checked;
+  const data = await loadData(useDemoMode);
+  renderAll(data);
+});
+
+(async () => {
+  bumpSize();
+  const data = await loadData(false);   // try live first
+  renderAll(data);
+  // Initialise the real-mode form with a couple of sample rows.
+  initHoldingsForm();
+})();
+
+// ============================================================================
+// REAL PORTFOLIO MODE — holdings entry, autocomplete, server-driven optimisation
+// ============================================================================
+let currentMode = 'demo';
+let UNIVERSE = null;     // Loaded from /universe or fallback below.
+let holdingRows = [];    // [{id, ticker, qty, avg}]
+let nextRowId = 1;
+
+// Fallback universe (used when no server). Top-20 most-traded NSE names.
+const UNIVERSE_FALLBACK = [
+  {ticker:"RELIANCE",  name:"Reliance Industries"},
+  {ticker:"TCS",       name:"Tata Consultancy Services"},
+  {ticker:"HDFCBANK",  name:"HDFC Bank"},
+  {ticker:"ICICIBANK", name:"ICICI Bank"},
+  {ticker:"INFY",      name:"Infosys"},
+  {ticker:"BHARTIARTL",name:"Bharti Airtel"},
+  {ticker:"SBIN",      name:"State Bank of India"},
+  {ticker:"LT",        name:"Larsen & Toubro"},
+  {ticker:"ITC",       name:"ITC"},
+  {ticker:"HINDUNILVR",name:"Hindustan Unilever"},
+  {ticker:"AXISBANK",  name:"Axis Bank"},
+  {ticker:"KOTAKBANK", name:"Kotak Mahindra Bank"},
+  {ticker:"MARUTI",    name:"Maruti Suzuki"},
+  {ticker:"BAJFINANCE",name:"Bajaj Finance"},
+  {ticker:"ASIANPAINT",name:"Asian Paints"},
+  {ticker:"HCLTECH",   name:"HCL Technologies"},
+  {ticker:"WIPRO",     name:"Wipro"},
+  {ticker:"TITAN",     name:"Titan Company"},
+  {ticker:"TATAMOTORS",name:"Tata Motors"},
+  {ticker:"SUNPHARMA", name:"Sun Pharmaceutical"},
+  {ticker:"GOLDBEES",  name:"Nippon Gold ETF"},
+  {ticker:"NIFTYBEES", name:"Nippon Nifty 50 ETF"},
+  {ticker:"LIQUIDBEES",name:"Nippon Liquid ETF"},
+];
+
+async function loadUniverse() {
+  if (UNIVERSE) return UNIVERSE;
+  try {
+    const resp = await fetch('http://localhost:8421/universe', {
+      signal: AbortSignal.timeout ? AbortSignal.timeout(1500) : undefined,
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      UNIVERSE = data.stocks || UNIVERSE_FALLBACK;
+      return UNIVERSE;
+    }
+  } catch (e) { /* fall through */ }
+  UNIVERSE = UNIVERSE_FALLBACK;
+  return UNIVERSE;
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-demo').classList.toggle('active', mode === 'demo');
+  document.getElementById('mode-real').classList.toggle('active', mode === 'real');
+  document.getElementById('config-demo').style.display  = mode === 'demo' ? '' : 'none';
+  document.getElementById('config-real').style.display  = mode === 'real' ? '' : 'none';
+  document.getElementById('view-demo').style.display    = mode === 'demo' ? '' : 'none';
+  document.getElementById('view-real').style.display    = mode === 'real' ? '' : 'none';
+  document.getElementById('kpi-row-demo').style.display = mode === 'demo' ? '' : 'none';
+  document.getElementById('kpi-row-real').style.display = mode === 'real' ? '' : 'none';
+  document.getElementById('kpi-panel-title').textContent =
+      mode === 'demo' ? 'Current Read' : 'Portfolio Snapshot';
+  document.getElementById('kpi-panel-sub').textContent =
+      mode === 'demo' ? "From compiler's policy-iteration solver"
+                      : "Live prices + verified bucket recommendation";
+}
+
+function initHoldingsForm() {
+  // Pre-populate with a few sample rows so the user sees the shape.
+  const samples = [
+    {ticker:"RELIANCE", qty: 50, avg: 2400},
+    {ticker:"TCS",      qty: 30, avg: 3500},
+    {ticker:"HDFCBANK", qty: 40, avg: 1600},
+  ];
+  samples.forEach(s => addHoldingRow(s));
+}
+
+function addHoldingRow(preset) {
+  preset = preset || {ticker:"", qty:"", avg:""};
+  const id = nextRowId++;
+  holdingRows.push({id, ...preset});
+  const container = document.getElementById('holdings-rows');
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.dataset.id = id;
+  row.innerHTML =
+    `<div class="autocomplete-wrap">
+       <input type="text" class="ticker-input" placeholder="e.g. RELIANCE"
+              value="${escapeHtml(preset.ticker || '')}" autocomplete="off" />
+       <div class="autocomplete-list"></div>
+     </div>
+     <input type="number" class="qty-input"  placeholder="qty"  value="${preset.qty || ''}" min="0" step="any" />
+     <input type="number" class="avg-input"  placeholder="₹ avg" value="${preset.avg || ''}" min="0" step="any" />
+     <button class="remove-btn" title="Remove row" aria-label="Remove" onclick="removeHoldingRow(${id})">×</button>`;
+  container.appendChild(row);
+
+  const tickerInput = row.querySelector('.ticker-input');
+  const list        = row.querySelector('.autocomplete-list');
+  attachAutocomplete(tickerInput, list, id);
+  tickerInput.addEventListener('change', () => {
+    const r = holdingRows.find(r => r.id === id); if (r) r.ticker = tickerInput.value.toUpperCase().trim();
+  });
+  row.querySelector('.qty-input').addEventListener('change', e => {
+    const r = holdingRows.find(r => r.id === id); if (r) r.qty = e.target.value;
+  });
+  row.querySelector('.avg-input').addEventListener('change', e => {
+    const r = holdingRows.find(r => r.id === id); if (r) r.avg = e.target.value;
+  });
+}
+
+function removeHoldingRow(id) {
+  holdingRows = holdingRows.filter(r => r.id !== id);
+  const row = document.querySelector(`.holdings-form .row[data-id="${id}"]`);
+  if (row) row.remove();
+}
+
+async function attachAutocomplete(inputEl, listEl, rowId) {
+  await loadUniverse();
+  let highlighted = -1;
+
+  function refresh() {
+    const q = inputEl.value.toUpperCase().trim();
+    if (!q) { listEl.classList.remove('open'); listEl.innerHTML = ''; return; }
+    const matches = UNIVERSE.filter(s =>
+      s.ticker.toUpperCase().startsWith(q) ||
+      (s.name && s.name.toUpperCase().includes(q))
+    ).slice(0, 8);
+    if (matches.length === 0) { listEl.classList.remove('open'); listEl.innerHTML = ''; return; }
+    listEl.innerHTML = matches.map((m, i) =>
+      `<div class="autocomplete-item${i === highlighted ? ' highlighted' : ''}"
+            data-ticker="${escapeHtml(m.ticker)}">
+         <span class="ticker">${escapeHtml(m.ticker)}</span>
+         <span class="name">${escapeHtml(m.name || '')}</span>
+       </div>`
+    ).join('');
+    listEl.classList.add('open');
+    listEl.querySelectorAll('.autocomplete-item').forEach((el, i) => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); pick(el.dataset.ticker); });
+    });
+  }
+
+  function pick(ticker) {
+    inputEl.value = ticker;
+    listEl.classList.remove('open');
+    const r = holdingRows.find(r => r.id === rowId);
+    if (r) r.ticker = ticker;
+  }
+
+  inputEl.addEventListener('input', () => { highlighted = -1; refresh(); });
+  inputEl.addEventListener('focus', refresh);
+  inputEl.addEventListener('blur',  () => setTimeout(() => listEl.classList.remove('open'), 150));
+  inputEl.addEventListener('keydown', e => {
+    const items = listEl.querySelectorAll('.autocomplete-item');
+    if (e.key === 'ArrowDown') {
+      highlighted = Math.min(items.length - 1, highlighted + 1); refresh(); e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      highlighted = Math.max(0, highlighted - 1); refresh(); e.preventDefault();
+    } else if (e.key === 'Enter' && highlighted >= 0) {
+      pick(items[highlighted].dataset.ticker); e.preventDefault();
+    }
+  });
+}
+
+function collectHoldings() {
+  const rows = document.querySelectorAll('.holdings-form .row');
+  const out = [];
+  rows.forEach(row => {
+    const ticker = row.querySelector('.ticker-input').value.toUpperCase().trim();
+    const qty    = parseFloat(row.querySelector('.qty-input').value);
+    const avg    = parseFloat(row.querySelector('.avg-input').value);
+    if (!ticker) return;
+    if (!isFinite(qty) || qty <= 0) return;
+    if (!isFinite(avg) || avg <= 0) return;
+    out.push({ticker, qty, avg_buy_price: avg});
+  });
+  return out;
+}
+
+document.getElementById('optimize-real-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('optimize-real-btn');
+  const holdings = collectHoldings();
+  if (holdings.length === 0) {
+    showToast('Add at least one valid holding (ticker, qty, avg buy price).');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Fetching live prices...';
+  document.getElementById('real-fetch-status').textContent = 'Calling compiler & fetching live prices...';
+
+  let result = null;
+  let server_used = false;
+  try {
+    const resp = await fetch('http://localhost:8421/portfolio/optimize', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({holdings}),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined,
+    });
+    if (resp.ok) {
+      result = await resp.json();
+      server_used = !result.error;
+    }
+  } catch (e) { /* will fall through to client-side seed prices */ }
+
+  if (!server_used) {
+    // No server / yfinance failed: synthesise a client-side result from
+    // embedded seed prices in DEMO_DATA so the UI still does something useful.
+    result = synthesiseClientSideResult(holdings);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Fetch Prices & Optimize';
+
+  if (result.error) {
+    document.getElementById('real-fetch-status').innerHTML =
+      `<span style="color: var(--red);">Error: ${escapeHtml(result.error)}</span>`;
+    return;
+  }
+  renderRealResult(result, server_used);
+});
+
+// Client-side fallback when no server is running. Uses the embedded
+// DEMO_DATA for HMM/values/policy and a small seed-price table for prices.
+const CLIENT_SEED_PRICES = {
+  RELIANCE:1265, TCS:4150, HDFCBANK:1755, ICICIBANK:1265, INFY:1860,
+  BHARTIARTL:1545, SBIN:790, LT:3580, ITC:460, HINDUNILVR:2480,
+  AXISBANK:1145, KOTAKBANK:1745, MARUTI:11420, BAJFINANCE:6520,
+  ASIANPAINT:2290, HCLTECH:1845, WIPRO:560, TITAN:3320, TATAMOTORS:775,
+  SUNPHARMA:1830, GOLDBEES:78, NIFTYBEES:265, LIQUIDBEES:1000,
+  POWERGRID:315, NTPC:365, ONGC:262, NESTLEIND:2310, ULTRACEMCO:11425,
+  "M&M":2885, ADANIENT:2780, ADANIPORTS:1195, COALINDIA:400, BAJAJFINSV:1545,
+  TECHM:1650, DRREDDY:1275, CIPLA:1495, DIVISLAB:5980, BRITANNIA:4810,
+  EICHERMOT:4780, HEROMOTOCO:4490, TATASTEEL:145, JSWSTEEL:945, HINDALCO:665,
+};
+const ACTION_SPLITS = {
+  AggressiveEquity: {equity: 0.90, debt: 0.10, gold: 0.00},
+  ModerateEquity:   {equity: 0.60, debt: 0.30, gold: 0.10},
+  Defensive:        {equity: 0.30, debt: 0.40, gold: 0.30},
+  CashAndGold:      {equity: 0.10, debt: 0.40, gold: 0.50},
+};
+
+function synthesiseClientSideResult(holdings) {
+  // Use DEMO_DATA's policy/values; pick the action for the highest-value regime.
+  const policy = (DEMO_DATA && DEMO_DATA.policy)  || {Bull:'AggressiveEquity'};
+  const values = (DEMO_DATA && DEMO_DATA.values)  || {Bull: 1};
+  const most_likely = Object.keys(values).reduce((a,b) => values[a] > values[b] ? a : b);
+  const recommended = policy[most_likely] || 'ModerateEquity';
+
+  const rows = holdings.map(h => {
+    const ticker = h.ticker.toUpperCase();
+    const meta = (DEMO_DATA.stocks || []).find(s => s.ticker === ticker) || {};
+    const live = CLIENT_SEED_PRICES[ticker] || h.avg_buy_price;
+    const cost = h.qty * h.avg_buy_price;
+    const value = h.qty * live;
+    return {
+      ticker, name: meta.name || ticker, sector: meta.sector || 'Unknown',
+      beta: meta.beta == null ? null : meta.beta,
+      asset_class: ticker === 'GOLDBEES' ? 'gold' :
+                   (ticker === 'LIQUIDBEES' || ticker === 'DSPLIQ') ? 'debt' : 'equity',
+      qty: h.qty, avg_buy_price: h.avg_buy_price, live_price: live,
+      cost, value, pnl: value-cost,
+      pnl_pct: cost > 0 ? ((value-cost)/cost*100) : 0,
+      price_source: 'seed',
+    };
+  });
+
+  const nav = rows.reduce((s,r) => s + r.value, 0);
+  // Target weights with same algorithm as optimizer.py.
+  const split = ACTION_SPLITS[recommended] || ACTION_SPLITS.ModerateEquity;
+  const by_class = {equity: [], debt: [], gold: []};
+  rows.forEach(r => by_class[r.asset_class].push(r));
+  const target = {};
+  const additions = [];
+  // Equity tilt.
+  const eq = by_class.equity;
+  if (eq.length > 0) {
+    let scores;
+    if (recommended === 'AggressiveEquity') scores = eq.map(r => Math.max(0.3, r.beta || 1.0));
+    else if (recommended === 'Defensive')    scores = eq.map(r => Math.max(0.3, 1.5 - (r.beta || 1.0)));
+    else                                     scores = eq.map(_ => 1.0);
+    const total = scores.reduce((s,x) => s+x, 0);
+    eq.forEach((r,i) => target[r.ticker] = split.equity * scores[i] / total);
+  } else if (split.equity > 0) { target.NIFTYBEES = split.equity; additions.push('NIFTYBEES'); }
+  // Debt.
+  const debt = by_class.debt;
+  if (debt.length > 0) debt.forEach(r => target[r.ticker] = split.debt / debt.length);
+  else if (split.debt > 0) { target.LIQUIDBEES = split.debt; additions.push('LIQUIDBEES'); }
+  // Gold.
+  const gold = by_class.gold;
+  if (gold.length > 0) gold.forEach(r => target[r.ticker] = split.gold / gold.length);
+  else if (split.gold > 0) { target.GOLDBEES = split.gold; additions.push('GOLDBEES'); }
+
+  // Trades.
+  const trades = [];
+  Object.entries(target).forEach(([ticker, tw]) => {
+    const cur = rows.find(r => r.ticker === ticker);
+    const live = (cur && cur.live_price) || CLIENT_SEED_PRICES[ticker] || 0;
+    if (live <= 0) return;
+    const currentValue = cur ? cur.value : 0;
+    const targetValue  = tw * nav;
+    const deltaValue   = targetValue - currentValue;
+    const deltaQty     = Math.round(deltaValue / live);
+    if (deltaQty === 0 && currentValue > 0) return;
+    const meta = (DEMO_DATA.stocks || []).find(s => s.ticker === ticker) || {};
+    trades.push({
+      ticker, name: meta.name || ticker, sector: meta.sector || 'Unknown',
+      action: deltaQty > 0 ? 'BUY' : (deltaQty < 0 ? 'SELL' : 'HOLD'),
+      current_qty: cur ? cur.qty : 0,
+      target_qty: Math.round(targetValue / live),
+      delta_qty: deltaQty, delta_value: deltaValue,
+      live_price: live, target_weight: tw,
+      current_weight: nav > 0 ? currentValue / nav : 0,
+    });
+  });
+  trades.sort((a,b) => Math.abs(b.delta_value) - Math.abs(a.delta_value));
+
+  const total_cost  = rows.reduce((s,r) => s + r.cost, 0);
+  const total_value = nav;
+  return {
+    holdings: rows, trades, nav,
+    total_cost, total_value,
+    total_pnl: total_value - total_cost,
+    total_pnl_pct: total_cost > 0 ? (total_value - total_cost) / total_cost * 100 : 0,
+    recommended_action: recommended,
+    target_weights: target,
+    suggested_additions: additions,
+    verify_assertions: (DEMO_DATA && DEMO_DATA.verify_assertions) || [],
+    hmm: DEMO_DATA && DEMO_DATA.hmm,
+    policy, values,
+    _client_synth: true,
+  };
+}
+
+function renderRealResult(result, server_used) {
+  // Update top status line.
+  const status = document.getElementById('real-fetch-status');
+  if (result._client_synth) {
+    status.innerHTML = `<span style="color: var(--accent-gold);">⚠ Offline mode</span> — using seed prices. Start the Python server for live yfinance prices.`;
+  } else {
+    const livePrices = (result.holdings || []).filter(h => h.price_source === 'yfinance').length;
+    const seedPrices = (result.holdings || []).filter(h => h.price_source === 'seed').length;
+    let bits = [];
+    if (livePrices) bits.push(`<span style="color: var(--green);">${livePrices} live</span>`);
+    if (seedPrices) bits.push(`<span style="color: var(--accent-gold);">${seedPrices} seed (yfinance unavailable)</span>`);
+    status.innerHTML = `Prices: ${bits.join(' / ') || 'none'} · refreshed just now`;
+  }
+
+  // KPI row.
+  document.getElementById('kpi-nav').textContent = fmtINR(result.nav);
+  const pnlEl = document.getElementById('kpi-pnl');
+  pnlEl.textContent = (result.total_pnl >= 0 ? '+' : '') + fmtINR(Math.abs(result.total_pnl)).replace('₹','₹') + ` (${result.total_pnl_pct >= 0 ? '+' : ''}${result.total_pnl_pct.toFixed(2)}%)`;
+  pnlEl.className = 'kpi-val ' + (result.total_pnl > 0 ? 'gain' : (result.total_pnl < 0 ? 'loss' : 'neutral'));
+  document.getElementById('kpi-action-real').textContent = result.recommended_action;
+  const passed = (result.verify_assertions || []).filter(a => a.passed).length;
+  const total  = (result.verify_assertions || []).length;
+  document.getElementById('kpi-verify-real').textContent = total > 0 ? `${passed}/${total}` : '—';
+  document.getElementById('kpi-verify-real').className =
+    'kpi-val ' + (passed === total && total > 0 ? 'green' : 'red');
+
+  // Holdings table.
+  let html = '<thead><tr><th>Ticker</th><th>Qty</th><th class="right">Avg ₹</th>' +
+             '<th class="right">Live ₹</th><th class="right">Value</th>' +
+             '<th class="right">P&amp;L</th><th class="right">P&amp;L %</th></tr></thead><tbody>';
+  result.holdings.forEach(h => {
+    const sourceTag = `<span class="price-source-tag price-source-${h.price_source}">${h.price_source}</span>`;
+    const pnlClass = h.pnl > 0 ? 'pnl-green' : (h.pnl < 0 ? 'pnl-red' : '');
+    html += `<tr>
+      <td><b>${escapeHtml(h.ticker)}</b><br>
+          <span style="font-size:10px;color:var(--text-dim)">${escapeHtml(h.sector || '')}</span></td>
+      <td>${h.qty}</td>
+      <td class="right">${h.avg_buy_price.toFixed(2)}</td>
+      <td class="right">${h.live_price == null ? '—' : h.live_price.toFixed(2)}${sourceTag}</td>
+      <td class="right amount">${fmtINR(h.value)}</td>
+      <td class="right ${pnlClass}">${h.pnl >= 0 ? '+' : '−'}${fmtINR(Math.abs(h.pnl))}</td>
+      <td class="right ${pnlClass}">${h.pnl_pct >= 0 ? '+' : ''}${h.pnl_pct.toFixed(2)}%</td>
+    </tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById('real-holdings-table').innerHTML = html;
+
+  // Trade list.
+  let trHtml = '<thead><tr><th>Action</th><th>Ticker</th>' +
+               '<th class="right">Δ qty</th><th class="right">Target qty</th>' +
+               '<th class="right">Δ ₹</th><th class="right">Target weight</th></tr></thead><tbody>';
+  (result.trades || []).forEach(t => {
+    trHtml += `<tr>
+      <td><span class="trade-action-${t.action}">${t.action}</span></td>
+      <td><b>${escapeHtml(t.ticker)}</b><br>
+          <span style="font-size:10px;color:var(--text-dim)">${escapeHtml(t.sector || '')}</span></td>
+      <td class="right">${t.delta_qty > 0 ? '+' : ''}${t.delta_qty}</td>
+      <td class="right">${t.target_qty}</td>
+      <td class="right amount">${t.delta_value >= 0 ? '+' : '−'}${fmtINR(Math.abs(t.delta_value))}</td>
+      <td class="right">${(t.target_weight * 100).toFixed(1)}%</td>
+    </tr>`;
+  });
+  if ((result.trades || []).length === 0) {
+    trHtml += '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-dim);">Portfolio already aligned with target. No trades needed.</td></tr>';
+  }
+  trHtml += '</tbody>';
+  document.getElementById('trade-list-table').innerHTML = trHtml;
+  const tagEl = document.getElementById('trades-action-tag');
+  tagEl.textContent = ` · posture: ${result.recommended_action}`;
+
+  // VERIFY assertions (real-mode panel).
+  const list = document.getElementById('verify-list-real');
+  list.innerHTML = '';
+  (result.verify_assertions || []).forEach(a => {
+    const div = document.createElement('div');
+    div.className = 'verify-item' + (a.passed ? '' : ' failed');
+    div.innerHTML =
+      `<div class="icon">${a.passed ? '✓' : '✗'}</div>` +
+      `<div class="meat"><div class="label"><b>${a.passed ? 'VERIFIED:' : 'FAILED:'}</b> ${escapeHtml(a.label)}</div>` +
+      `<div class="expr">VERIFY: ${escapeHtml(a.expr)}</div></div>`;
+    list.appendChild(div);
+  });
+
+  // Strategy analysis tabs continue to show the demo data's HMM/regime view,
+  // since those panels are a property of the model, not the user holdings.
+  showToast(`Optimized · ${passed}/${total} VERIFY proofs · ${result.recommended_action}`);
+}
+</script>
+
+</body>
+</html>

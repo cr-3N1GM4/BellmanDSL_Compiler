@@ -1,0 +1,78 @@
+# robot_model.mdp — Phase 3B autopsy demo.
+#
+# A warehouse-robot model where the engineer assumed collisions are rare:
+# P(NearObstacle, Advance -> Collision) = 0.02. The VERIFY block guards
+# against the dangerous "advance under uncertainty" policy. At compile
+# time, the model passes VERIFY.
+#
+# After 47 steps of real-world operation (in robot_run.log), the empirical
+# P(NearObstacle, Advance -> Collision) was ~0.32, sixteen times higher.
+# Running mdp_autopsy on this pair produces:
+#   - PRIMARY SUSPECT: (NearObstacle, Advance) with KL ~ 0.5+
+#   - Verdict:         MODEL_DANGEROUS  (underestimation factor > 10x)
+#   - Exit code:       2
+#   - Minimum edit:    a small alpha along the empirical direction breaks
+#                       the VERIFY assertion V(NearObstacle) > -50.0.
+
+STATE: Safe
+STATE: NearObstacle
+STATE: CriticalZone
+STATE: Collision
+
+ACTION: Advance
+ACTION: SlowDown
+ACTION: Stop
+
+# --- Optimistic transition model ---
+
+# From Safe, advancing usually keeps you safe, occasionally moves into NearObstacle.
+TRANSITION: Safe Advance  Safe          0.85
+TRANSITION: Safe Advance  NearObstacle  0.15
+TRANSITION: Safe SlowDown Safe          1.0
+TRANSITION: Safe Stop     Safe          1.0
+
+# From NearObstacle, advancing is "usually safe" per the engineer:
+# model says only 2% chance of collision. (Empirically: 32%.)
+TRANSITION: NearObstacle Advance  Safe          0.20
+TRANSITION: NearObstacle Advance  NearObstacle  0.50
+TRANSITION: NearObstacle Advance  CriticalZone  0.28
+TRANSITION: NearObstacle Advance  Collision     0.02     # <-- optimistic
+TRANSITION: NearObstacle SlowDown NearObstacle  0.60
+TRANSITION: NearObstacle SlowDown Safe          0.40
+TRANSITION: NearObstacle Stop     NearObstacle  1.0
+
+# From CriticalZone, advance is much riskier even per the model.
+TRANSITION: CriticalZone Advance  CriticalZone  0.30
+TRANSITION: CriticalZone Advance  Collision     0.50
+TRANSITION: CriticalZone Advance  NearObstacle  0.20
+TRANSITION: CriticalZone SlowDown CriticalZone  0.50
+TRANSITION: CriticalZone SlowDown NearObstacle  0.50
+TRANSITION: CriticalZone Stop     CriticalZone  1.0
+
+# Collision is absorbing.
+TRANSITION: Collision Advance  Collision 1.0
+TRANSITION: Collision SlowDown Collision 1.0
+TRANSITION: Collision Stop     Collision 1.0
+
+# --- Rewards ---
+REWARD: Safe          1.0
+REWARD: NearObstacle -1.0
+REWARD: CriticalZone -3.0
+REWARD: Collision  -100.0
+
+DISCOUNT: 0.95
+SOLVER:   value_iteration
+
+# --- Formal guarantees the engineer wrote ---
+# At compile time (under the optimistic 2% collision probability):
+#   V(NearObstacle) ~ +15.35  >  +14.0  (engineer confident in upside)
+#   V(NearObstacle) ~ +15.35  >  -10.0  (broad safety floor)
+#   pi(NearObstacle) = SlowDown != Advance
+# The first assertion encodes the engineer's belief that the operating
+# value at NearObstacle is tightly bounded above +14. Under the empirical
+# 25% collision probability, V(NearObstacle) drops below this bound,
+# breaking the assertion. The backwards solver finds the alpha along the
+# empirical direction where the break first occurs.
+VERIFY: V(NearObstacle) > 14.0
+VERIFY: V(NearObstacle) > -10.0
+VERIFY: pi(NearObstacle) != Advance

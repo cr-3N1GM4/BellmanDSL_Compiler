@@ -1,0 +1,53 @@
+# Build artifacts
+bin/
+*.o
+*.obj
+*.exe
+*.out
+
+# LaTeX intermediate files
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# Portfolio caches
+portfolio/.price_cache.json
+portfolio/.regime_cache.json
+portfolio/portfolio_run.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# Test outputs
+tests/run_tests
+tests/*.tmp
+
+# Logs (keep example .log files in examples/autopsy_demo/, ignore root-level)
+/*.log
+
+# HTML outputs from --html flag
+output.html
+*_report.html
+
+# Local config
+.env
+.envrc

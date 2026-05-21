@@ -1,0 +1,531 @@
+{
+  "hmm": {
+    "states": [
+      "Bull",
+      "Bear",
+      "Sideways",
+      "Crisis"
+    ],
+    "log_likelihood": 729.9529599,
+    "transition_matrix": [
+      [
+        0.4349371435,
+        0.1771853015,
+        9.869236327e-08,
+        0.3878774562
+      ],
+      [
+        0.04092668706,
+        0.8039831891,
+        0.1550901238,
+        2.531485371e-12
+      ],
+      [
+        0.05190529795,
+        0.09647200459,
+        0.7665972886,
+        0.08502540882
+      ],
+      [
+        0.1310191812,
+        0.005026282038,
+        0.2184495061,
+        0.6455050306
+      ]
+    ],
+    "emission_mean": [
+      -0.0663841384,
+      -0.02048743772,
+      0.00583102961,
+      0.02512461081
+    ],
+    "emission_std": [
+      0.04691170671,
+      0.02524838069,
+      0.01605757803,
+      0.02646262935
+    ],
+    "initial": [
+      7.451540397e-283,
+      2.987224652e-83,
+      1,
+      9.739434017e-156
+    ]
+  },
+  "values": {
+    "Sideways": 2.677894344,
+    "Crisis": 2.624776343,
+    "Bull": 3.624110304,
+    "Bear": 2.375960447
+  },
+  "policy": {
+    "Sideways": "ModerateEquity",
+    "Crisis": "CashAndGold",
+    "Bull": "AggressiveEquity",
+    "Bear": "Defensive"
+  },
+  "verify_failures": 0,
+  "stocks": [
+    {
+      "ticker": "TCS",
+      "sector": "IT",
+      "beta": 0.85,
+      "sharpe_bull": 1.2,
+      "color": "#56cbf9"
+    },
+    {
+      "ticker": "INFY",
+      "sector": "IT",
+      "beta": 0.92,
+      "sharpe_bull": 1.1,
+      "color": "#56cbf9"
+    },
+    {
+      "ticker": "HDFCBANK",
+      "sector": "Banking",
+      "beta": 1.05,
+      "sharpe_bull": 1.3,
+      "color": "#10b981"
+    },
+    {
+      "ticker": "RELIANCE",
+      "sector": "Energy",
+      "beta": 0.98,
+      "sharpe_bull": 0.9,
+      "color": "#f2c94c"
+    },
+    {
+      "ticker": "GOLDBEES",
+      "sector": "Gold",
+      "beta": -0.1,
+      "sharpe_bull": -0.2,
+      "color": "#ffd700"
+    }
+  ],
+  "regime_history": [
+    {
+      "month": "2020-01",
+      "regime": "Sideways",
+      "nifty": 12250.1,
+      "return": 2.08
+    },
+    {
+      "month": "2020-02",
+      "regime": "Sideways",
+      "nifty": 12342.1,
+      "return": 0.75
+    },
+    {
+      "month": "2020-03",
+      "regime": "Crisis",
+      "nifty": 11260.3,
+      "return": -8.77
+    },
+    {
+      "month": "2020-04",
+      "regime": "Crisis",
+      "nifty": 9347.8,
+      "return": -16.98
+    },
+    {
+      "month": "2020-05",
+      "regime": "Bear",
+      "nifty": 9207.3,
+      "return": -1.5
+    },
+    {
+      "month": "2020-06",
+      "regime": "Bear",
+      "nifty": 8903.3,
+      "return": -3.3
+    },
+    {
+      "month": "2020-07",
+      "regime": "Bull",
+      "nifty": 9177.6,
+      "return": 3.08
+    },
+    {
+      "month": "2020-08",
+      "regime": "Bull",
+      "nifty": 9674.0,
+      "return": 5.41
+    },
+    {
+      "month": "2020-09",
+      "regime": "Bull",
+      "nifty": 9737.3,
+      "return": 0.65
+    },
+    {
+      "month": "2020-10",
+      "regime": "Bull",
+      "nifty": 9733.7,
+      "return": -0.04
+    },
+    {
+      "month": "2020-11",
+      "regime": "Bull",
+      "nifty": 9601.8,
+      "return": -1.35
+    },
+    {
+      "month": "2020-12",
+      "regime": "Bull",
+      "nifty": 9609.4,
+      "return": 0.08
+    },
+    {
+      "month": "2021-01",
+      "regime": "Sideways",
+      "nifty": 9601.3,
+      "return": -0.08
+    },
+    {
+      "month": "2021-02",
+      "regime": "Bear",
+      "nifty": 9112.4,
+      "return": -5.09
+    },
+    {
+      "month": "2021-03",
+      "regime": "Crisis",
+      "nifty": 8258.5,
+      "return": -9.37
+    },
+    {
+      "month": "2021-04",
+      "regime": "Bear",
+      "nifty": 8145.6,
+      "return": -1.37
+    },
+    {
+      "month": "2021-05",
+      "regime": "Sideways",
+      "nifty": 7951.4,
+      "return": -2.38
+    },
+    {
+      "month": "2021-06",
+      "regime": "Sideways",
+      "nifty": 7816.1,
+      "return": -1.7
+    },
+    {
+      "month": "2021-07",
+      "regime": "Sideways",
+      "nifty": 8005.5,
+      "return": 2.42
+    },
+    {
+      "month": "2021-08",
+      "regime": "Sideways",
+      "nifty": 8019.3,
+      "return": 0.17
+    },
+    {
+      "month": "2021-09",
+      "regime": "Sideways",
+      "nifty": 7824.8,
+      "return": -2.43
+    },
+    {
+      "month": "2021-10",
+      "regime": "Sideways",
+      "nifty": 7652.9,
+      "return": -2.2
+    },
+    {
+      "month": "2021-11",
+      "regime": "Sideways",
+      "nifty": 7796.7,
+      "return": 1.88
+    },
+    {
+      "month": "2021-12",
+      "regime": "Sideways",
+      "nifty": 7867.6,
+      "return": 0.91
+    },
+    {
+      "month": "2022-01",
+      "regime": "Bear",
+      "nifty": 7821.6,
+      "return": -0.58
+    },
+    {
+      "month": "2022-02",
+      "regime": "Bear",
+      "nifty": 7708.1,
+      "return": -1.45
+    },
+    {
+      "month": "2022-03",
+      "regime": "Bear",
+      "nifty": 7458.0,
+      "return": -3.25
+    },
+    {
+      "month": "2022-04",
+      "regime": "Bear",
+      "nifty": 7584.6,
+      "return": 1.7
+    },
+    {
+      "month": "2022-05",
+      "regime": "Bear",
+      "nifty": 7440.1,
+      "return": -1.9
+    },
+    {
+      "month": "2022-06",
+      "regime": "Sideways",
+      "nifty": 7590.8,
+      "return": 2.03
+    },
+    {
+      "month": "2022-07",
+      "regime": "Sideways",
+      "nifty": 7556.7,
+      "return": -0.45
+    },
+    {
+      "month": "2022-08",
+      "regime": "Sideways",
+      "nifty": 7535.9,
+      "return": -0.28
+    },
+    {
+      "month": "2022-09",
+      "regime": "Bear",
+      "nifty": 6851.5,
+      "return": -9.08
+    },
+    {
+      "month": "2022-10",
+      "regime": "Bear",
+      "nifty": 7106.6,
+      "return": 3.72
+    },
+    {
+      "month": "2022-11",
+      "regime": "Bear",
+      "nifty": 6765.1,
+      "return": -4.8
+    },
+    {
+      "month": "2022-12",
+      "regime": "Sideways",
+      "nifty": 6560.3,
+      "return": -3.03
+    },
+    {
+      "month": "2023-01",
+      "regime": "Sideways",
+      "nifty": 6705.0,
+      "return": 2.21
+    },
+    {
+      "month": "2023-02",
+      "regime": "Sideways",
+      "nifty": 6761.9,
+      "return": 0.85
+    },
+    {
+      "month": "2023-03",
+      "regime": "Sideways",
+      "nifty": 7054.7,
+      "return": 4.33
+    },
+    {
+      "month": "2023-04",
+      "regime": "Sideways",
+      "nifty": 6988.7,
+      "return": -0.94
+    },
+    {
+      "month": "2023-05",
+      "regime": "Sideways",
+      "nifty": 6777.9,
+      "return": -3.02
+    },
+    {
+      "month": "2023-06",
+      "regime": "Sideways",
+      "nifty": 6995.1,
+      "return": 3.2
+    },
+    {
+      "month": "2023-07",
+      "regime": "Sideways",
+      "nifty": 7033.9,
+      "return": 0.55
+    },
+    {
+      "month": "2023-08",
+      "regime": "Sideways",
+      "nifty": 7249.6,
+      "return": 3.07
+    },
+    {
+      "month": "2023-09",
+      "regime": "Sideways",
+      "nifty": 7403.1,
+      "return": 2.12
+    },
+    {
+      "month": "2023-10",
+      "regime": "Sideways",
+      "nifty": 7350.6,
+      "return": -0.71
+    },
+    {
+      "month": "2023-11",
+      "regime": "Crisis",
+      "nifty": 6570.4,
+      "return": -10.61
+    },
+    {
+      "month": "2023-12",
+      "regime": "Bull",
+      "nifty": 6730.3,
+      "return": 2.43
+    },
+    {
+      "month": "2024-01",
+      "regime": "Bull",
+      "nifty": 6691.0,
+      "return": -0.58
+    },
+    {
+      "month": "2024-02",
+      "regime": "Bull",
+      "nifty": 6645.4,
+      "return": -0.68
+    },
+    {
+      "month": "2024-03",
+      "regime": "Bull",
+      "nifty": 6404.2,
+      "return": -3.63
+    },
+    {
+      "month": "2024-04",
+      "regime": "Bull",
+      "nifty": 6925.5,
+      "return": 8.14
+    },
+    {
+      "month": "2024-05",
+      "regime": "Crisis",
+      "nifty": 6412.0,
+      "return": -7.42
+    },
+    {
+      "month": "2024-06",
+      "regime": "Crisis",
+      "nifty": 5854.1,
+      "return": -8.7
+    },
+    {
+      "month": "2024-07",
+      "regime": "Crisis",
+      "nifty": 5116.5,
+      "return": -12.6
+    },
+    {
+      "month": "2024-08",
+      "regime": "Crisis",
+      "nifty": 4651.5,
+      "return": -9.09
+    },
+    {
+      "month": "2024-09",
+      "regime": "Bear",
+      "nifty": 4394.5,
+      "return": -5.53
+    },
+    {
+      "month": "2024-10",
+      "regime": "Crisis",
+      "nifty": 4158.5,
+      "return": -5.37
+    },
+    {
+      "month": "2024-11",
+      "regime": "Crisis",
+      "nifty": 3801.1,
+      "return": -8.59
+    },
+    {
+      "month": "2024-12",
+      "regime": "Bear",
+      "nifty": 3840.0,
+      "return": 1.02
+    }
+  ],
+  "annotations": [
+    {
+      "month": "2020-03",
+      "label": "COVID Crash",
+      "type": "Crisis"
+    },
+    {
+      "month": "2020-11",
+      "label": "Vaccine Rally",
+      "type": "Bull"
+    },
+    {
+      "month": "2022-01",
+      "label": "FII Selloff Begins",
+      "type": "Bear"
+    }
+  ],
+  "current_belief": {
+    "Bull": 0.3333333333333333,
+    "Bear": 0.16666666666666666,
+    "Sideways": 0.0,
+    "Crisis": 0.5
+  },
+  "most_likely_regime": "Crisis",
+  "recommended_action": "CashAndGold",
+  "weights": {
+    "TCS": 0.0267,
+    "INFY": 0.0244,
+    "HDFCBANK": 0.0289,
+    "RELIANCE": 0.02,
+    "GOLDBEES": 0.5,
+    "Debt": 0.4
+  },
+  "verify_assertions": [
+    {
+      "label": "Bull regime \u2192 AggressiveEquity",
+      "expr": "\u03c0(Bull) == AggressiveEquity",
+      "passed": true
+    },
+    {
+      "label": "Bear regime \u2192 Defensive allocation",
+      "expr": "\u03c0(Bear) == Defensive",
+      "passed": true
+    },
+    {
+      "label": "Crisis regime \u2192 CashAndGold",
+      "expr": "\u03c0(Crisis) == CashAndGold",
+      "passed": true
+    },
+    {
+      "label": "V(Bull) > V(Bear)",
+      "expr": "V(Bull) > V(Bear)",
+      "passed": true
+    },
+    {
+      "label": "V(Crisis) < V(Sideways)",
+      "expr": "V(Crisis) < V(Sideways)",
+      "passed": true
+    }
+  ],
+  "discount": 0.92,
+  "solver_mode": "policy_iteration",
+  "portfolio_size_inr": 1000000,
+  "generated_from": "examples/portfolio.mdp via mdp_compiler v3.0"
+}

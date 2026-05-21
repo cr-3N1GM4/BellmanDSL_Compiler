@@ -1,0 +1,67 @@
+# robot_nav.mdp — A small noisy-sensor navigation POMDP.
+#
+# Three corridor cells: Left, Middle, Right. The robot can Move-Left or
+# Move-Right, with a small chance of slipping (staying in place). Right is
+# the goal state. The robot has a noisy distance sensor that says "Near"
+# (likely close to goal) or "Far" (likely away from goal). The agent never
+# directly observes its position — it must navigate using belief alone.
+
+STATE: Left
+STATE: Middle
+STATE: Right
+
+ACTION: GoLeft
+ACTION: GoRight
+
+# Movement dynamics: 80% intended, 20% slip (stay).
+TRANSITION: Left   GoLeft  Left   1.0
+TRANSITION: Left   GoRight Middle 0.8
+TRANSITION: Left   GoRight Left   0.2
+TRANSITION: Middle GoLeft  Left   0.8
+TRANSITION: Middle GoLeft  Middle 0.2
+TRANSITION: Middle GoRight Right  0.8
+TRANSITION: Middle GoRight Middle 0.2
+TRANSITION: Right  GoLeft  Right  1.0  # Goal is absorbing
+TRANSITION: Right  GoRight Right  1.0  # Goal is absorbing
+
+OBSERVATION: Near
+OBSERVATION: Far
+
+# Noisy sensor: closer to Right => more likely "Near".
+# OBSERVE_PROB rows are indexed by NEXT state and action taken to reach it.
+OBSERVE_PROB: Left   GoLeft  Near 0.1
+OBSERVE_PROB: Left   GoLeft  Far  0.9
+OBSERVE_PROB: Left   GoRight Near 0.1
+OBSERVE_PROB: Left   GoRight Far  0.9
+OBSERVE_PROB: Middle GoLeft  Near 0.4
+OBSERVE_PROB: Middle GoLeft  Far  0.6
+OBSERVE_PROB: Middle GoRight Near 0.4
+OBSERVE_PROB: Middle GoRight Far  0.6
+OBSERVE_PROB: Right  GoLeft  Near 0.9
+OBSERVE_PROB: Right  GoLeft  Far  0.1
+OBSERVE_PROB: Right  GoRight Near 0.9
+OBSERVE_PROB: Right  GoRight Far  0.1
+
+# Per-step costs and goal reward.
+ACTION_REWARD: Left   GoLeft  -1.0
+ACTION_REWARD: Left   GoRight -1.0
+ACTION_REWARD: Middle GoLeft  -1.0
+ACTION_REWARD: Middle GoRight -1.0
+ACTION_REWARD: Right  GoLeft  10.0
+ACTION_REWARD: Right  GoRight 10.0
+
+# Initial belief: completely uninformed.
+INITIAL_BELIEF: Left   0.34
+INITIAL_BELIEF: Middle 0.33
+INITIAL_BELIEF: Right  0.33
+
+BELIEF_STATE: Unknown        Left:0.34 Middle:0.33 Right:0.33
+BELIEF_STATE: AlmostAtGoal   Left:0.05 Middle:0.10 Right:0.85
+
+DISCOUNT: 0.9
+SOLVER: pbvi
+ALPHA_VECTORS: 20
+PBVI_ITERATIONS: 100
+
+# At AlmostAtGoal, GoRight is optimal (it absorbs the +10 goal reward).
+VERIFY: π(AlmostAtGoal) == GoRight
